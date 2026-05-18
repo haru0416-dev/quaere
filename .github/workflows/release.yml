@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g. v0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            cross: false
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            cross: true
+            linker: aarch64-linux-gnu-gcc
+            apt: gcc-aarch64-linux-gnu
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            cross: false
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            cross: false
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cli
+          key: release-${{ matrix.target }}
+
+      - name: Install cross linker (linux aarch64 only)
+        if: matrix.cross == true
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.apt }}
+
+      - name: Set cross-linker env (linux aarch64 only)
+        if: matrix.linker != ''
+        run: |
+          target_env=$(echo '${{ matrix.target }}' | tr 'a-z-' 'A-Z_')
+          echo "CARGO_TARGET_${target_env}_LINKER=${{ matrix.linker }}" >> "$GITHUB_ENV"
+
+      - name: Build release binary
+        working-directory: cli
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Bundle archive
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME:-${{ inputs.tag }}}"
+          archive="quaere-${tag}-${{ matrix.target }}"
+          mkdir -p "dist/${archive}"
+          cp "cli/target/${{ matrix.target }}/release/quaere" "dist/${archive}/quaere"
+          cp LICENSE README.md "dist/${archive}/"
+          tar -czf "dist/${archive}.tar.gz" -C dist "${archive}"
+          rm -rf "dist/${archive}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bin-${{ matrix.target }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  skills:
+    name: skill tarball
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Bundle skills
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME:-${{ inputs.tag }}}"
+          archive="quaere-skills-${tag}.tar.gz"
+          tar -czf "$archive" skills LICENSE README.md
+          mkdir -p dist
+          mv "$archive" dist/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: skill-bundle
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: publish release
+    needs: [build, skills]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Stage release assets
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          find artifacts -name '*.tar.gz' -exec mv {} release/ \;
+          cd release
+          sha256sum *.tar.gz > SHA256SUMS
+          ls -la
+          cat SHA256SUMS
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME:-${{ inputs.tag }}}"
+          gh release create "$tag" \
+            release/*.tar.gz release/SHA256SUMS \
+            --title "$tag" \
+            --generate-notes \
+            --repo "$GITHUB_REPOSITORY"

@@ -54,25 +54,52 @@ If two skills seem plausible, choose the one that answers the blocking question 
 
 ## Installation
 
-> The `quaere` CLI and `curl` one-liner installer are planned for **v0.1.0**. Until v0.1.0 ships, install manually.
-
-Manual install (user-level):
+### Recommended: curl one-liner (after v0.1.0 release)
 
 ```bash
-git clone https://github.com/<owner>/quaere.git
-cd quaere
-mkdir -p ~/.claude/skills
-cp -R skills/* ~/.claude/skills/
+curl -fsSL https://raw.githubusercontent.com/haru0416-dev/quaere/main/scripts/install.sh | sh
 ```
 
-Project-local install:
+This downloads the `quaere` CLI binary for your platform, verifies its checksum against the release `SHA256SUMS`, places it in `$HOME/.local/bin/quaere`, and runs `quaere install` to extract the skill set to `~/.claude/skills/`.
+
+Environment overrides: `QUAERE_VERSION` to pin a tag, `QUAERE_REPO` to install from a fork, `QUAERE_INSTALL_DIR` to relocate the binary, `QUAERE_SKILLS=0` to skip the skill extraction step.
+
+### cargo install (Rust toolchain users)
 
 ```bash
-mkdir -p .claude/skills
-cp -R /path/to/quaere/skills/* .claude/skills/
+cargo install quaere-cli
+quaere install
+```
+
+`cargo install` builds the CLI from source and the second command extracts the bundled skills.
+
+### Homebrew (planned v0.2)
+
+A `Formula/quaere.rb` stub exists in this repo; the tap repository `haru0416-dev/homebrew-quaere` will be set up alongside the v0.2 release, after which:
+
+```bash
+brew install haru0416-dev/quaere/quaere
+```
+
+### Manual (source checkout)
+
+```bash
+git clone https://github.com/haru0416-dev/quaere.git
+cd quaere
+mkdir -p ~/.claude/skills
+cp -R skills/quaere-* ~/.claude/skills/
 ```
 
 Each skill is a directory containing a `SKILL.md`. The `name` frontmatter matches the directory name.
+
+### Verifying and managing the install
+
+```bash
+quaere list      # show installed skills and the recorded version
+quaere doctor    # verify frontmatter, names, line budget, orphans
+quaere update    # check for a newer release on GitHub
+quaere version   # print the CLI version
+```
 
 ## Examples
 
