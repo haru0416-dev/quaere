@@ -1,0 +1,24 @@
+# Local agent investigation state
+.agent-state/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Rust (CLI workspace)
+target/
+Cargo.lock.bak
+
+# Eval results (local runs, large, regenerable)
+eval-results/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
