@@ -1,0 +1,25 @@
+{
+  "max_lines": 500,
+  "required_sections": [
+    "^## Iron Law$",
+    "^## When to use$",
+    "^## When NOT to use$",
+    "^## Core model$",
+    "^## Workflow$",
+    "^## Output expectations$",
+    "^## Worked example$",
+    "^## Common drift modes$",
+    "^## Handoff to other skills$",
+    "^## Stop condition$"
+  ],
+  "forbidden_patterns": [
+    "(?<![a-z-])semantic-review(?![a-z])",
+    "(?<![a-z-])external-grounding(?![a-z])",
+    "(?<![a-z-])evidence-gated-review(?![a-z])",
+    "(?<![a-z-])execution-loop(?![a-z])",
+    "(?<![a-z-])security-audit-loop(?![a-z])",
+    "\\bTODO:",
+    "\\bFIXME:",
+    "\\bXXX:"
+  ]
+}

@@ -1,0 +1,65 @@
+name: Manual LLM eval
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Runner template, e.g. "claude=claude -p < $prompt_file"'
+        required: true
+        type: string
+      skill:
+        description: 'Optional skill filter (e.g. quaere-evidence)'
+        required: false
+        type: string
+      scenario:
+        description: 'Optional scenario id filter'
+        required: false
+        type: string
+      mode:
+        description: 'baseline / with-skill / both'
+        required: false
+        default: both
+        type: choice
+        options:
+          - baseline
+          - with-skill
+          - both
+      require_assertions:
+        description: 'Fail the run if any scenario lacks assertions'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    name: eval (${{ inputs.skill || 'all' }})
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Run skill evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          args=(--runner "${{ inputs.runner }}" --mode "${{ inputs.mode }}")
+          if [ -n "${{ inputs.skill }}" ]; then args+=(--skill "${{ inputs.skill }}"); fi
+          if [ -n "${{ inputs.scenario }}" ]; then args+=(--scenario "${{ inputs.scenario }}"); fi
+          if [ "${{ inputs.require_assertions }}" = "true" ]; then args+=(--require-assertions); fi
+          python evals/run_skill_evals.py "${args[@]}"
+
+      - name: Upload eval-results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: eval-results-${{ github.run_id }}
+          path: eval-results/
+          if-no-files-found: warn
+          retention-days: 30
