@@ -2,9 +2,42 @@
 
 > Process-correction skills that make coding agents ask before they act.
 
-Quaere is a set of skills for Claude Code, Codex, and other coding agents that slows them down at the points where they most often drift: shallow code reading, plausible but unverified claims, unreviewed implementation blobs, and unauthorized commits.
+[![CI](https://github.com/haru0416-dev/quaere/actions/workflows/ci.yml/badge.svg)](https://github.com/haru0416-dev/quaere/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/haru0416-dev/quaere?label=release&color=6b3fa0)](https://github.com/haru0416-dev/quaere/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-The name comes from Latin *quaere* — "ask", "seek", "interrogate". Every skill in this collection forces the same move: state a claim, defend it with evidence, and only then act.
+```bash
+curl -fsSL https://quaere.dev/install.sh | sh
+```
+
+[Why Quaere](#why-quaere) · [Skills](#skills) · [Installation](#installation) · [CLI](#verifying-and-managing-the-install) · [quaere.dev](https://quaere.dev/)
+
+## Why Quaere
+
+Coding agents drift at four predictable points:
+
+- they read code shallowly,
+- they accept plausible claims without proof,
+- they edit in unreviewed blobs,
+- they commit without authorization.
+
+Quaere is five skills that slow the agent down at each of those points — not by adding ceremony, but by forcing one move: **state a claim, defend it with evidence, only then act.**
+
+The name comes from Latin *quaere* — "ask", "seek", "interrogate". Every skill in this collection enforces the same gate.
+
+### Measured effect
+
+Quaere v0.1.0 was evaluated against 14 scenarios with 88 deterministic assertions, run end-to-end through Codex CLI 0.128.0 in both `baseline` (no skill) and `with-skill` modes:
+
+| mode                     | pass rate         | failures   |
+| ------------------------ | ----------------: | ---------: |
+| Baseline (no skill)      | 61.7%             | 31 / 81    |
+| **With skill**           | **89.8%**         | 9 / 88     |
+| Δ                        | **+28 pp**        |            |
+
+In the smoking-gun assertion-type breakdown, the skill flips baseline failures to with-skill passes at **100%** rate on three of five assertion types — *claim ↔ evidence pairing*, *canonical vocabulary*, and *minimum enumeration*. Structural section ordering flips 78%. The eval harness lives at `evals/run_skill_evals.py`; the 14 scenarios at `evals/scenarios.json`.
+
+Cross-runner stability is verified: the same `sdk-version-grounding` scenario hit an identical 6P/0F with-skill score on Claude Code 2.1.141 and Codex CLI 0.128.0.
 
 ## Skills
 
@@ -14,7 +47,7 @@ The name comes from Latin *quaere* — "ask", "seek", "interrogate". Every skill
 | [`skills/quaere-grounding`](skills/quaere-grounding/SKILL.md) | The task depends on external, version-sensitive facts: SDKs, APIs, libraries, CLIs, cloud services, security advisories, changelogs, release notes, or docs. | Anchors local versions, ranks source quality, checks version fit and conflicts, and turns confirmed external facts into implementation constraints. |
 | [`skills/quaere-evidence`](skills/quaere-evidence/SKILL.md) | You are handling unclear bugs, risky PR review, CI failures, flaky tests, security-sensitive changes, database/concurrency changes, external APIs, or claims that need evidence before patching. | Requires findings, hypotheses/claims, defense, disconfirming probes, decisions, verification, and handoff before accepting a fix. |
 | [`skills/quaere-execution`](skills/quaere-execution/SKILL.md) | You are authorized to implement a multi-step coding change, apply a plan, finish review feedback, or turn a specification into working code. | Enforces read → plan → execute → review → fix → verify → commit, with commits only when explicitly authorized. |
-| [`skills/quaere-audit`](skills/quaere-audit/SKILL.md) | You are doing deep security auditing, bug bounty preparation, protocol conformance checking, exploitability analysis, or SPECA-style specification-grounded vulnerability discovery. | Derives explicit security properties, maps attack surfaces and code, attempts proofs, gates false positives, and reports confirmed/potential/rejected findings with evidence or PoCs. |
+| [`skills/quaere-audit`](skills/quaere-audit/SKILL.md) | You are doing deep security auditing, bug bounty preparation, protocol conformance checking, exploitability analysis, or specification-grounded vulnerability discovery. | Derives explicit security properties, maps attack surfaces and code, attempts proofs, gates false positives, and reports confirmed/potential/rejected findings with evidence or PoCs. |
 
 ## Pipeline
 
@@ -54,10 +87,10 @@ If two skills seem plausible, choose the one that answers the blocking question 
 
 ## Installation
 
-### Recommended: curl one-liner (after v0.1.0 release)
+### Recommended: curl one-liner
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/haru0416-dev/quaere/main/scripts/install.sh | sh
+curl -fsSL https://quaere.dev/install.sh | sh
 ```
 
 This downloads the `quaere` CLI binary for your platform, verifies its checksum against the release `SHA256SUMS`, places it in `$HOME/.local/bin/quaere`, and runs `quaere install` to extract the skill set to `~/.claude/skills/`.
@@ -143,16 +176,16 @@ The validator checks frontmatter, directory/name consistency, README coverage, l
 
 ## Skill evaluation
 
-`evals/scenarios.json` contains portable scenario prompts for qualitative evaluation. Run them through any local agent CLI by providing a command template:
+`evals/scenarios.json` contains 14 portable scenario prompts. Run them through any local agent CLI by providing a command template:
 
 ```bash
 python evals/run_skill_evals.py \
-  --runner 'codex=codex exec < $prompt_file' \
+  --runner 'codex=codex exec - < $prompt_file' \
   --scenario sdk-version-grounding \
   --mode both
 ```
 
-The runner writes isolated prompts, stdout/stderr, metadata, and grades under `eval-results/<timestamp>/`. `--mode both` runs a baseline prompt without the skill and a with-skill prompt that injects the relevant `SKILL.md`.
+The runner writes isolated prompts, stdout/stderr, metadata, and per-assertion grades under `eval-results/<timestamp>/`. `--mode both` runs a baseline prompt without the skill and a with-skill prompt that injects the relevant `SKILL.md`.
 
 Runner command templates are shell commands. They can print the agent response to stdout or redirect it to `$output_file`. They can use:
 
@@ -162,8 +195,7 @@ Runner command templates are shell commands. They can print the agent response t
 - `$run_dir` — result directory
 - `$scenario_id`, `$skill`, `$mode` — run metadata
 
-Scenarios may include deterministic `assertions` (`contains`, `contains_any`, `not_contains`, `regex`, `exit_code`) for CI-friendly checks, in addition to the manual rubric in `expected`. Real-LLM eval runs are gated behind a manual workflow trigger and are not required to pass on every PR.
-
+Scenarios carry deterministic `assertions` (`contains`, `contains_any`, `not_contains`, `regex`, `ordered_sections`, `requires_pair`, `min_section_count`, `not_in_baseline`, `exit_code`) for CI-friendly checks, in addition to a manual rubric in `expected`. Real-LLM eval runs are gated behind a manual workflow trigger and are not required to pass on every PR.
 
 ## License
 
