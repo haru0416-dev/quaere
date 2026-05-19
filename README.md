@@ -231,6 +231,17 @@ At load time the extras file is merged into the main scenarios by matching `(sce
 
 Real-LLM eval runs are gated behind a manual workflow trigger and are not required to pass on every PR.
 
+## External benchmarks (roadmap)
+
+The in-tree eval is fast and well-suited to per-PR signal, but it does not substitute for third-party validation. Four external benchmarks are tracked for future integration, in this priority order:
+
+1. **[Terminal-Bench v2](https://www.tbench.ai/)** — 89 terminal-environment tasks (SWE, security, data, sysadmin). The closest fit for `quaere-execution` and `quaere-grounding`. Highest expected Δ. Targeted for v0.3.
+2. **[SWE-bench Verified](https://www.swebench.com/)** — 500 human-verified GitHub-issue patches. The standard credibility test for coding agents; non-optional eventually. Heavy infra cost (≥120GB storage, 16GB RAM, 8 CPU) and substantial API budget. Targeted for v1.0.
+3. **[SkillsBench](https://www.skillsbench.ai/)** — 84 domain-skill tasks (3D, robotics, security PCAP, energy, etc.). Submission unit is "agent that uses skills". Lower expected Δ because domain skills dominate; Quaere's process-correction angle is less visible. Tracked, not committed.
+4. **SWE-Bench Pro** — harder successor to Verified. Considered only after Verified.
+
+Quaere's claim is that process-correction skills lift any agent's quality on the deliberation axis. Terminal-Bench probes that claim directly; SWE-bench Verified probes whether it generalizes to long-form patch generation. Until those numbers exist, the only published evidence is the in-tree eval result above.
+
 ## License
 
 MIT. See [`LICENSE`](LICENSE).
