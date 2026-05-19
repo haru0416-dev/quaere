@@ -12,6 +12,9 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "evals" / "run_skill_evals.py"
 
+sys.path.insert(0, str(ROOT))
+from evals.run_skill_evals import load_scenarios  # noqa: E402
+
 
 def _make_demo_skill(skills_dir: Path) -> Path:
     skill_dir = skills_dir / "demo"
@@ -592,6 +595,260 @@ class RequireAssertionsFlagTest(unittest.TestCase):
             )
             self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
             self.assertIn("require-assertions", completed.stderr)
+
+
+class ScenariosExtraMergeTest(unittest.TestCase):
+    """Cover --scenarios-extra merge semantics via direct load_scenarios calls."""
+
+    def _write(self, path: Path, body: dict[str, Any]) -> None:
+        path.write_text(json.dumps(body), encoding="utf-8")
+
+    def _base_assertions(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "name": "regex assertion",
+                "type": "regex",
+                "pattern": "(?i)foo|bar",
+            },
+            {
+                "name": "ordered assertion",
+                "type": "ordered_sections",
+                "patterns": ["(?i)alpha", "(?i)beta", "(?i)gamma"],
+            },
+            {
+                "name": "contains_any assertion",
+                "type": "contains_any",
+                "texts": ["hello", "world"],
+            },
+            {
+                "name": "pair assertion",
+                "type": "requires_pair",
+                "if_contains": "(?i)trigger",
+                "must_also_contain": "(?i)guard",
+                "skip_when": "(?i)skipped because",
+            },
+        ]
+
+    def _base_scenario(self) -> dict[str, Any]:
+        return {
+            "id": "demo-scenario",
+            "skill": "demo",
+            "prompt": "x",
+            "expected": [],
+            "assertions": self._base_assertions(),
+        }
+
+    def test_no_extras_path_returns_main_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            main = Path(temp) / "scenarios.json"
+            self._write(main, {"scenarios": [self._base_scenario()]})
+            scenarios = load_scenarios(main)
+            self.assertEqual(scenarios[0].assertions[0]["pattern"], "(?i)foo|bar")
+
+    def test_regex_pattern_alternation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            main = Path(temp) / "scenarios.json"
+            extra = Path(temp) / "scenarios.ja.json"
+            self._write(main, {"scenarios": [self._base_scenario()]})
+            self._write(
+                extra,
+                {
+                    "scenarios": [
+                        {
+                            "id": "demo-scenario",
+                            "assertions": [
+                                {
+                                    "name": "regex assertion",
+                                    "type": "regex",
+                                    "pattern": "バー|フー",
+                                }
+                            ],
+                        }
+                    ]
+                },
+            )
+            scenarios = load_scenarios(main, extra)
+            self.assertEqual(scenarios[0].assertions[0]["pattern"], "(?i)foo|bar|バー|フー")
+
+    def test_ordered_sections_per_position_alternation_and_empty_slot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            main = Path(temp) / "scenarios.json"
+            extra = Path(temp) / "scenarios.ja.json"
+            self._write(main, {"scenarios": [self._base_scenario()]})
+            # Empty middle slot leaves position unchanged.
+            self._write(
+                extra,
+                {
+                    "scenarios": [
+                        {
+                            "id": "demo-scenario",
+                            "assertions": [
+                                {
+                                    "name": "ordered assertion",
+                                    "type": "ordered_sections",
+                                    "patterns": ["アルファ", "", "ガンマ"],
+                                }
+                            ],
+                        }
+                    ]
+                },
+            )
+            scenarios = load_scenarios(main, extra)
+            ordered = scenarios[0].assertions[1]
+            self.assertEqual(
+                ordered["patterns"],
+                ["(?i)alpha|アルファ", "(?i)beta", "(?i)gamma|ガンマ"],
+            )
+
+    def test_contains_any_texts_concatenation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            main = Path(temp) / "scenarios.json"
+            extra = Path(temp) / "scenarios.ja.json"
+            self._write(main, {"scenarios": [self._base_scenario()]})
+            self._write(
+                extra,
+                {
+                    "scenarios": [
+                        {
+                            "id": "demo-scenario",
+                            "assertions": [
+                                {
+                                    "name": "contains_any assertion",
+                                    "type": "contains_any",
+                                    "texts": ["こんにちは", "世界"],
+                                }
+                            ],
+                        }
+                    ]
+                },
+            )
+            scenarios = load_scenarios(main, extra)
+            self.assertEqual(
+                scenarios[0].assertions[2]["texts"],
+                ["hello", "world", "こんにちは", "世界"],
+            )
+
+    def test_requires_pair_all_three_fields_alternated(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            main = Path(temp) / "scenarios.json"
+            extra = Path(temp) / "scenarios.ja.json"
+            self._write(main, {"scenarios": [self._base_scenario()]})
+            self._write(
+                extra,
+                {
+                    "scenarios": [
+                        {
+                            "id": "demo-scenario",
+                            "assertions": [
+                                {
+                                    "name": "pair assertion",
+                                    "type": "requires_pair",
+                                    "if_contains": "トリガ",
+                                    "must_also_contain": "ガード",
+                                    "skip_when": "理由により省略",
+                                }
+                            ],
+                        }
+                    ]
+                },
+            )
+            scenarios = load_scenarios(main, extra)
+            pair = scenarios[0].assertions[3]
+            self.assertEqual(pair["if_contains"], "(?i)trigger|トリガ")
+            self.assertEqual(pair["must_also_contain"], "(?i)guard|ガード")
+            self.assertEqual(pair["skip_when"], "(?i)skipped because|理由により省略")
+
+    def test_unknown_scenario_id_errors_out(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            main = Path(temp) / "scenarios.json"
+            extra = Path(temp) / "scenarios.ja.json"
+            self._write(main, {"scenarios": [self._base_scenario()]})
+            self._write(
+                extra,
+                {
+                    "scenarios": [
+                        {
+                            "id": "no-such-scenario",
+                            "assertions": [
+                                {"name": "regex assertion", "type": "regex", "pattern": "x"}
+                            ],
+                        }
+                    ]
+                },
+            )
+            with self.assertRaisesRegex(ValueError, "no-such-scenario"):
+                load_scenarios(main, extra)
+
+    def test_unknown_assertion_name_errors_out(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            main = Path(temp) / "scenarios.json"
+            extra = Path(temp) / "scenarios.ja.json"
+            self._write(main, {"scenarios": [self._base_scenario()]})
+            self._write(
+                extra,
+                {
+                    "scenarios": [
+                        {
+                            "id": "demo-scenario",
+                            "assertions": [
+                                {"name": "no such assertion", "type": "regex", "pattern": "x"}
+                            ],
+                        }
+                    ]
+                },
+            )
+            with self.assertRaisesRegex(ValueError, "no such assertion"):
+                load_scenarios(main, extra)
+
+    def test_type_mismatch_errors_out(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            main = Path(temp) / "scenarios.json"
+            extra = Path(temp) / "scenarios.ja.json"
+            self._write(main, {"scenarios": [self._base_scenario()]})
+            self._write(
+                extra,
+                {
+                    "scenarios": [
+                        {
+                            "id": "demo-scenario",
+                            "assertions": [
+                                {
+                                    "name": "regex assertion",
+                                    "type": "contains_any",
+                                    "texts": ["x"],
+                                }
+                            ],
+                        }
+                    ]
+                },
+            )
+            with self.assertRaisesRegex(ValueError, "type mismatch"):
+                load_scenarios(main, extra)
+
+    def test_patterns_length_mismatch_errors_out(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            main = Path(temp) / "scenarios.json"
+            extra = Path(temp) / "scenarios.ja.json"
+            self._write(main, {"scenarios": [self._base_scenario()]})
+            self._write(
+                extra,
+                {
+                    "scenarios": [
+                        {
+                            "id": "demo-scenario",
+                            "assertions": [
+                                {
+                                    "name": "ordered assertion",
+                                    "type": "ordered_sections",
+                                    "patterns": ["only-one"],
+                                }
+                            ],
+                        }
+                    ]
+                },
+            )
+            with self.assertRaisesRegex(ValueError, "length mismatch"):
+                load_scenarios(main, extra)
 
 
 if __name__ == "__main__":

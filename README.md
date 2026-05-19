@@ -216,6 +216,20 @@ Scenarios carry deterministic `assertions` for CI-friendly checks, in addition t
 
 The `skip_when` clause on `requires_pair` lets an assertion treat a labeled skip branch (e.g. `Final gate: skipped because <reason>`) as vacuously satisfied. Anchor `skip_when` tightly — the bare token `(?i)skipped` would silently flip fails to passes whenever the word appears anywhere in output.
 
+### Locale alternates
+
+The public surface of the project is English: skill bodies, scenario prompts, and assertion patterns in `evals/scenarios.json` are English-only. Locale-specific token alternates (Japanese, paraphrases, etc.) live in `evals/scenarios.ja.json` and are opt-in via `--scenarios-extra`:
+
+```bash
+python evals/run_skill_evals.py \
+  --runner 'codex=codex exec - < $prompt_file' \
+  --scenarios-extra evals/scenarios.ja.json \
+  --mode both \
+  --output-dir "$(pwd)/eval-results/$(date -u +%Y%m%dT%H%M%SZ)"
+```
+
+At load time the extras file is merged into the main scenarios by matching `(scenario id, assertion name)`. Regex/string fields get `|`-alternation appended; `ordered_sections.patterns` and `not_in_baseline.patterns` get per-position alternation; `contains_any.texts` get array concatenation. Unknown ids or names error out so stale extras files cannot silently drop alternates.
+
 Real-LLM eval runs are gated behind a manual workflow trigger and are not required to pass on every PR.
 
 ## License

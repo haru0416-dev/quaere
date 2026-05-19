@@ -21,12 +21,13 @@ Eval-driven quality pass on the v0.1.0 skill set and harness. The 9 with-skill r
   - `audit tier declared` now requires the canonical `Tier: Triage|Standard|Deep` labeled line, not prose mentions.
   - `findings classified` now requires `Confirmed:` / `Potential:` / `Rejected:` / `Inconclusive:` as labeled lines.
   - Added `confirmed finding references a derived security property or spec clause` so confirmed findings must point to a named Property, spec clause, RFC, or invariant.
-- `evals/scenarios.json` — Added Japanese / paraphrase alternatives across `regex`, `contains_any`, `ordered_sections`, `requires_pair`, and `not_in_baseline` patterns (falsifier/反証, safe substitute/安全な代替, production/本番, promote to Standard/Standard に昇格, etc.) so semantically correct Japanese output is no longer rejected on token-literal grounds.
+- `evals/run_skill_evals.py` — new `--scenarios-extra PATH` flag merges a sibling JSON file at load time. Regex/string fields get `|`-alternation appended; `ordered_sections.patterns` / `not_in_baseline.patterns` get per-position alternation; `contains_any.texts` get array concatenation. Unknown scenario ids or assertion names error out so stale extras cannot silently drop alternates.
 
 ### Added
 
 - `eval-fixtures/no-web-local-grounding/` — new workspace fixture: a pinned `slimsync` 0.7.3 POSIX shell stand-in with `--version` / `--help`, a dated vendored manual mirroring an unreachable canonical URL, plus `src/sync.sh` and `.syncignore`. Designed to make baseline and with-skill outputs diverge by colliding with `rsync --exclude-from=FILE` model memory.
-- `tests/test_run_skill_evals.py` — new unit test covering both pass and fail cases of the `skip_when` clause.
+- `evals/scenarios.ja.json` — Japanese-locale alternates for the eight assertions whose tokens had previously been embedded directly into `scenarios.json`. The main file is now English-only; locale tokens are merged in only when the user passes `--scenarios-extra evals/scenarios.ja.json`. This keeps the public surface single-language while preserving the language-bias-removal goal from ADR-0006 Stream B-1.
+- `tests/test_run_skill_evals.py` — new unit tests covering the `skip_when` clause and the `--scenarios-extra` merge semantics (regex alternation, per-position alternation with empty-slot pass-through, array concatenation, type mismatch and length mismatch errors).
 
 ### Skipped
 

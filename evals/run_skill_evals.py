@@ -48,16 +48,27 @@ class EvalJob:
     workspace_dir: Path
 
 
-def load_scenarios(path: Path) -> list[Scenario]:
+def load_scenarios(path: Path, extras_path: Path | None = None) -> list[Scenario]:
+    raw_scenarios = _load_raw_scenarios(path)
+    if extras_path is not None:
+        raw_extras = _load_raw_scenarios(extras_path)
+        _apply_scenario_extras(raw_scenarios, raw_extras, path, extras_path)
+    return _build_scenarios(raw_scenarios, path)
+
+
+def _load_raw_scenarios(path: Path) -> list[dict[str, Any]]:
     data = json.loads(path.read_text(encoding="utf-8"))
     raw_scenarios = data.get("scenarios")
     if not isinstance(raw_scenarios, list):
         raise ValueError(f"{path}: scenarios must be a list")
+    if not all(isinstance(item, dict) for item in raw_scenarios):
+        raise ValueError(f"{path}: every scenarios entry must be an object")
+    return raw_scenarios
 
+
+def _build_scenarios(raw_scenarios: list[dict[str, Any]], path: Path) -> list[Scenario]:
     scenarios: list[Scenario] = []
     for index, raw in enumerate(raw_scenarios):
-        if not isinstance(raw, dict):
-            raise ValueError(f"{path}: scenario {index} must be an object")
         scenario_id = require_str(raw, "id", path, index)
         skill = require_str(raw, "skill", path, index)
         prompt = require_str(raw, "prompt", path, index)
@@ -81,6 +92,114 @@ def load_scenarios(path: Path) -> list[Scenario]:
             )
         )
     return scenarios
+
+
+def _apply_scenario_extras(
+    main_scenarios: list[dict[str, Any]],
+    extra_scenarios: list[dict[str, Any]],
+    main_path: Path,
+    extras_path: Path,
+) -> None:
+    """Merge extras into main scenarios in place.
+
+    Match by `id` then by assertion `name`. Locale alternates are appended
+    via `|`-alternation onto regex/string fields and concatenated onto
+    array fields. Unknown ids or names error out so a stale extras file
+    cannot silently drop alternates.
+    """
+    main_by_id = {scn.get("id"): scn for scn in main_scenarios}
+    for extra in extra_scenarios:
+        sid = extra.get("id")
+        if not isinstance(sid, str) or sid not in main_by_id:
+            raise ValueError(
+                f"{extras_path}: scenario id {sid!r} not found in {main_path}"
+            )
+        main_scenario = main_by_id[sid]
+        main_assertions = main_scenario.get("assertions", [])
+        if not isinstance(main_assertions, list):
+            raise ValueError(
+                f"{main_path}: scenario {sid!r} assertions must be a list"
+            )
+        assertions_by_name = {a.get("name"): a for a in main_assertions if isinstance(a, dict)}
+        for extra_assertion in extra.get("assertions", []):
+            if not isinstance(extra_assertion, dict):
+                raise ValueError(
+                    f"{extras_path}: scenario {sid!r} extra assertion must be an object"
+                )
+            name = extra_assertion.get("name")
+            if not isinstance(name, str) or name not in assertions_by_name:
+                raise ValueError(
+                    f"{extras_path}: assertion {name!r} not found in scenario {sid!r}"
+                )
+            _merge_extra_assertion(
+                assertions_by_name[name], extra_assertion, extras_path, sid, name
+            )
+
+
+def _merge_extra_assertion(
+    main: dict[str, Any],
+    extra: dict[str, Any],
+    extras_path: Path,
+    sid: str,
+    name: str,
+) -> None:
+    extra_type = extra.get("type")
+    if extra_type is not None and extra_type != main.get("type"):
+        raise ValueError(
+            f"{extras_path}: assertion type mismatch for {sid}/{name} "
+            f"(main={main.get('type')!r}, extra={extra_type!r})"
+        )
+    # Single-string regex/alternation fields.
+    for key in ("pattern", "if_contains", "must_also_contain", "skip_when"):
+        if key in extra:
+            fragment = extra[key]
+            if not isinstance(fragment, str) or not fragment:
+                raise ValueError(
+                    f"{extras_path}: {sid}/{name} {key!r} alternate must be a non-empty string"
+                )
+            existing = main.get(key)
+            if not isinstance(existing, str) or not existing:
+                raise ValueError(
+                    f"{extras_path}: {sid}/{name} {key!r} alternation requires existing {key} in main"
+                )
+            main[key] = existing + "|" + fragment
+    # Per-position regex alternation (ordered_sections / not_in_baseline).
+    if "patterns" in extra:
+        fragments = extra["patterns"]
+        if not isinstance(fragments, list) or not all(
+            isinstance(item, str) for item in fragments
+        ):
+            raise ValueError(
+                f"{extras_path}: {sid}/{name} patterns alternates must be a list of strings"
+            )
+        existing = main.get("patterns")
+        if not isinstance(existing, list):
+            raise ValueError(
+                f"{extras_path}: {sid}/{name} patterns alternation requires existing patterns list"
+            )
+        if len(fragments) != len(existing):
+            raise ValueError(
+                f"{extras_path}: {sid}/{name} patterns length mismatch "
+                f"(main={len(existing)}, extra={len(fragments)})"
+            )
+        for idx, fragment in enumerate(fragments):
+            if fragment:
+                existing[idx] = existing[idx] + "|" + fragment
+    # Array concatenation (contains_any texts).
+    if "texts" in extra:
+        fragments = extra["texts"]
+        if not isinstance(fragments, list) or not all(
+            isinstance(item, str) for item in fragments
+        ):
+            raise ValueError(
+                f"{extras_path}: {sid}/{name} texts alternates must be a list of strings"
+            )
+        existing = main.get("texts")
+        if not isinstance(existing, list):
+            raise ValueError(
+                f"{extras_path}: {sid}/{name} texts concatenation requires existing texts list"
+            )
+        existing.extend(fragments)
 
 
 def require_str(raw: dict[str, Any], key: str, path: Path, index: int) -> str:
@@ -624,6 +743,17 @@ def mode_list(value: str) -> list[str]:
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scenarios", type=Path, default=DEFAULT_SCENARIOS)
+    parser.add_argument(
+        "--scenarios-extra",
+        type=Path,
+        default=None,
+        help=(
+            "Optional path to a locale-alternates file (same JSON shape as "
+            "--scenarios) whose assertion fields are appended via "
+            "`|`-alternation to the main scenarios at load time. Match is "
+            "by (scenario id, assertion name)."
+        ),
+    )
     parser.add_argument("--skills-dir", type=Path, default=DEFAULT_SKILLS_DIR)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--runner", action="append", type=parse_runner, required=True)
@@ -644,7 +774,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
-    scenarios = filter_scenarios(load_scenarios(args.scenarios), args.skill, set(args.scenario))
+    scenarios = filter_scenarios(
+        load_scenarios(args.scenarios, args.scenarios_extra),
+        args.skill,
+        set(args.scenario),
+    )
     if not scenarios:
         print("No scenarios matched.", file=sys.stderr)
         return 2
