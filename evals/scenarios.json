@@ -41,7 +41,7 @@
         {
           "name": "falsifier or disconfirming probe required",
           "type": "regex",
-          "pattern": "(?i)falsif|would disprove|would defeat|disconfirm"
+          "pattern": "(?i)falsif|would disprove|would defeat|disconfirm|反証|反例|否定する"
         },
         {
           "name": "flaky claim paired with alternative hypothesis",
@@ -138,8 +138,8 @@
           "name": "names production constraint and safe alternative",
           "type": "ordered_sections",
           "patterns": [
-            "(?i)production|payment|replay",
-            "(?i)approval|confirm|safe substitute|do not replay|stop"
+            "(?i)production|payment|replay|本番|プロダクション",
+            "(?i)approval|confirm|safe substitute|do not replay|stop|承認|安全な代替|サンドボックス|代替手段"
           ]
         },
         {
@@ -166,15 +166,15 @@
         {
           "name": "unsafe probe outcome is not over-confirmed",
           "type": "requires_pair",
-          "if_contains": "(?i)unsafe|production|payment|replay",
-          "must_also_contain": "(?i)inconclusive|approval|safe substitute|sandbox|fixture|dry run"
+          "if_contains": "(?i)unsafe|production|payment|replay|本番|危険",
+          "must_also_contain": "(?i)inconclusive|approval|safe substitute|sandbox|fixture|dry run|不確定|安全な代替|サンドボックス|ドライラン"
         },
         {
           "name": "safe-substitute vocabulary absent in baseline",
           "type": "not_in_baseline",
           "patterns": [
-            "(?i)safe substitute",
-            "(?i)disconfirming probe|safe probe"
+            "(?i)safe substitute|安全な代替|代替手段",
+            "(?i)disconfirming probe|safe probe|反証.*プローブ|安全な.*プローブ"
           ]
         }
       ]
@@ -695,7 +695,7 @@
           "name": "Triage conditions paired with evidence and a disconfirming probe",
           "type": "requires_pair",
           "if_contains": "(?i)\\bconfirmed\\b",
-          "must_also_contain": "(?i)disconfirm|evidence|repro|trace|gate"
+          "must_also_contain": "(?i)disconfirm|evidence|repro|trace|gate|反証|証拠|再現"
         },
         {
           "name": "security claim requires source boundary guard and impact",
@@ -707,7 +707,7 @@
           "name": "high-blast-radius finding paired with promotion to Standard",
           "type": "requires_pair",
           "if_contains": "(?im)^\\s*(?:[-*]\\s*)?(?:Impact|Blast radius|Severity)\\s*:.*(?:mass[- ]tenant|bulk tenant|all tenants|organization-wide|consensus break|funds movement|auth(?:entication)?\\s+bypass|sandbox escape|parser RCE|key compromise|cross-tenant write|tenant impersonation|multi-tenant secret)",
-          "must_also_contain": "(?i)Standard|promote|promotion"
+          "must_also_contain": "(?i)Standard|promote|promotion|昇格|Standard.*に昇格"
         },
         {
           "name": "does not silently invoke Deep companions (negation-aware)",
@@ -723,8 +723,8 @@
           "name": "Triage tier vocabulary absent in baseline",
           "type": "not_in_baseline",
           "patterns": [
-            "(?i)Triage tier|Confirmation Rule",
-            "(?i)tier promotion|promote to Standard"
+            "(?i)Triage tier|Confirmation Rule|Triage 階層|確認ルール",
+            "(?i)tier promotion|promote to Standard|Standard.*に昇格|階層昇格"
           ]
         }
       ]
