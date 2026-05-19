@@ -10,7 +10,7 @@
 curl -fsSL https://quaere.dev/install.sh | sh
 ```
 
-[Why Quaere](#why-quaere) · [Skills](#skills) · [Installation](#installation) · [CLI](#verifying-and-managing-the-install) · [quaere.dev](https://quaere.dev/)
+[Why Quaere](#why-quaere) · [Skills](#skills) · [Installation](#installation) · [CLI](#verifying-and-managing-the-install) · [quaere.dev](https://quaere.dev/) · [日本語](README.ja.md)
 
 ## Why Quaere
 
