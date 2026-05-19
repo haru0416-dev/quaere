@@ -66,6 +66,20 @@
       "id": "spec-grounded-security-audit",
       "assertions": [
         {
+          "name": "scope -> properties -> attack surface -> proof -> gates -> findings",
+          "type": "ordered_sections",
+          "patterns": [
+            "",
+            "",
+            "",
+            "攻撃者|主体|攻撃元",
+            "境界|シンク|ガード",
+            "証明|ギャップ",
+            "ゲート|到達可能性|悪用可能性",
+            "発見事項|判定|確定|潜在|却下"
+          ]
+        },
+        {
           "name": "confirmed finding paired with evidence and gates",
           "type": "requires_pair",
           "must_also_contain": "証拠|再現"
