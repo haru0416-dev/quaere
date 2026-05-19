@@ -4,7 +4,23 @@ All notable changes to Quaere are documented in this file. The format follows [K
 
 ## [Unreleased]
 
-Eval-driven quality pass on the v0.1.0 skill set and harness. The 9 with-skill residual failures from the v0.1.0 evaluation are addressed across two work streams without adding new skills. Tracked under `docs/adr/0006-eval-driven-v0.2-skill-template-fixes.md` (Accepted).
+## [0.2.0] — 2026-05-20
+
+Eval-driven quality pass on the v0.1.0 skill set and harness. The 9 with-skill residual failures from the v0.1.0 evaluation are addressed across two work streams without adding new skills.
+
+### Measured effect
+
+Two independent baseline + with-skill sweeps via Codex CLI 0.128.0 against the 14 scenarios with 90 deterministic assertions, `--scenarios-extra evals/scenarios.ja.json` enabled:
+
+| mode                | range (2 runs)     |
+| ------------------- | -----------------: |
+| Baseline (no skill) | 63.9 – 65.1%       |
+| **With skill**      | **91.1 – 94.4%**   |
+| Δ                   | **+27 to +29 pp**  |
+
+Compared to v0.1.0 (with-skill 89.8% / Δ +28 pp), v0.2.0 lifts the upper bound of with-skill by ~+4.6 pp and leaves Δ in the same band. Run-to-run variance is real for stochastic LLM output; numbers are a range, not a point estimate.
+
+All four Stream A targeted assertion flips confirmed across the runs (`regex disconfirm/falsify` in `ci-failure-evidence-before-patch`; `requires_pair Backing→source-type` in `weak-review-claim-rejection`; `ordered_sections` in `authorized-implementation-loop`; `ordered_sections` in `no-web-local-grounding`). Both post-measurement residuals also closed at the assertion level: markdown-tolerant tier regex now matches `**Tier:** Standard` / `**Tier:**\nStandard`, and `攻撃者` / `主体` / `攻撃元` alternates landed in the spec-grounded-security-audit ordered_sections position 4.
 
 ### Changed
 
@@ -31,11 +47,28 @@ Eval-driven quality pass on the v0.1.0 skill set and harness. The 9 with-skill r
 
 ### Distribution
 
-- Homebrew tap [`haru0416-dev/homebrew-quaere`](https://github.com/haru0416-dev/homebrew-quaere) is now live with a working formula for v0.1.0. Install via `brew install haru0416-dev/quaere/quaere`. The in-tree `Formula/quaere.rb` stub is removed; the tap repository is the canonical source going forward.
+- Homebrew tap [`haru0416-dev/homebrew-quaere`](https://github.com/haru0416-dev/homebrew-quaere) is live with a working formula. Install via `brew install haru0416-dev/quaere/quaere`. The in-tree `Formula/quaere.rb` stub is removed; the tap repository is the canonical source going forward.
+
+### Web
+
+- `web/index.html` — added explicit `:focus-visible` outline, wrapped main content in `<main>`, and grouped the bottom resources into `<nav aria-label="Project resources">` to address WCAG 2.4.7 (Focus Visible) and 1.3.1 (Info and Relationships) findings.
+- `web/CNAME` — removed. The Pages publishing source is a custom Actions workflow, and the current GitHub docs state that any existing CNAME file in workflow-source Pages is ignored and is not required. The custom domain is held in Pages settings only.
+- GitHub Pages `https_enforced` toggled to `true` via REST API. `http://quaere.dev/` now 301-redirects to `https://quaere.dev/`.
+
+### Known limitations (deferred to v0.3)
+
+The v0.2 Codex sweep left these residual failure modes that this release does not address. All belong to the same axis — `skills/quaere-*.md` Output format does not push the model strongly enough toward canonical section headers and tier-companion sub-decisions:
+
+- `ci-failure-evidence-before-patch` `ledger sections appear in canonical order` — `Defense` section header position drift.
+- `weak-review-claim-rejection` `claim, defense, decision in order` — content is right, but the model paraphrases rather than emitting labeled sections.
+- `triage-tier-confirmation-rule` `Triage tier vocabulary absent in baseline` — with-skill output is missing the canonical phrase `promote to Standard` / `tier promotion`.
+- `spec-grounded-security-audit` `Standard tier requires grounding and evidence-gated review` — newly exposed by the v0.2 markdown-tolerant tier regex; when the audit declares Standard tier, the model does not consistently emit the External grounding + Evidence-gated review sub-decision pair.
+
+v0.3 targets template-strengthening across these axes.
 
 ### Skipped
 
-- ADR-0006 Stream B-5 (language-tagged assertion sets) is intentionally not implemented in this release. Stream B-1's alternation approach already covers the dual-language need without scenario-level duplication; revisit only if a third language or significantly larger token sets are added.
+- Stream B-5 of the internal v0.2 plan (language-tagged assertion sets) is intentionally not implemented. The alternation approach (English-only `scenarios.json` + opt-in `scenarios.ja.json` via `--scenarios-extra`) already covers the dual-language need without scenario-level duplication; revisit only if a third language or significantly larger token sets are added.
 
 ## [0.1.0] — 2026-05-19
 
@@ -100,5 +133,6 @@ rm -rf ~/.claude/skills/{semantic-review,external-grounding,evidence-gated-revie
 curl -fsSL https://raw.githubusercontent.com/haru0416-dev/quaere/main/scripts/install.sh | sh
 ```
 
-[Unreleased]: https://github.com/haru0416-dev/quaere/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/haru0416-dev/quaere/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/haru0416-dev/quaere/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/haru0416-dev/quaere/releases/tag/v0.1.0

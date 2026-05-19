@@ -27,17 +27,19 @@ The name comes from Latin *quaere* — "ask", "seek", "interrogate". Every skill
 
 ### Measured effect
 
-Quaere v0.1.0 was evaluated against 14 scenarios with 88 deterministic assertions, run end-to-end through Codex CLI 0.128.0 in both `baseline` (no skill) and `with-skill` modes:
+Quaere v0.2.0 was evaluated end-to-end through Codex CLI 0.128.0 against 14 scenarios with 90 deterministic assertions (`--scenarios-extra evals/scenarios.ja.json` enabled). Two independent baseline + with-skill sweeps:
 
-| mode                     | pass rate         | failures   |
-| ------------------------ | ----------------: | ---------: |
-| Baseline (no skill)      | 61.7%             | 31 / 81    |
-| **With skill**           | **89.8%**         | 9 / 88     |
-| Δ                        | **+28 pp**        |            |
+| mode                | range (2 runs)    |
+| ------------------- | ----------------: |
+| Baseline (no skill) | 63.9 – 65.1%      |
+| **With skill**      | **91.1 – 94.4%**  |
+| Δ                   | **+27 to +29 pp** |
 
-In the smoking-gun assertion-type breakdown, the skill flips baseline failures to with-skill passes at **100%** rate on three of five assertion types — *claim ↔ evidence pairing*, *canonical vocabulary*, and *minimum enumeration*. Structural section ordering flips 78%. The eval harness lives at `evals/run_skill_evals.py`; the 14 scenarios at `evals/scenarios.json`.
+Compared to v0.1.0 (with-skill 89.8% / Δ +28 pp), v0.2.0 lifts the upper bound of with-skill by ~+4.6 pp and keeps Δ in the same band. Run-to-run variance is real for stochastic LLM output; numbers above should be read as a range, not a point estimate.
 
-Cross-runner stability is verified: the same `sdk-version-grounding` scenario hit an identical 6P/0F with-skill score on Claude Code 2.1.141 and Codex CLI 0.128.0.
+The eval harness lives at `evals/run_skill_evals.py`; the 14 scenarios at `evals/scenarios.json`; Japanese-locale token alternates at `evals/scenarios.ja.json`.
+
+Cross-runner stability was confirmed during the v0.1.0 measurement: the same `sdk-version-grounding` scenario hit identical 6P/0F with-skill scores on Claude Code 2.1.141 and Codex CLI 0.128.0.
 
 ## Skills
 
