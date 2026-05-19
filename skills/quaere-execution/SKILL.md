@@ -134,7 +134,15 @@ After all units pass their targeted checks, run the final gate appropriate to th
 - full suite when feasible for multi-file or high-risk work
 - final diff-vs-contract review
 
-If a check is skipped, record why and the best next command. Do not say "done", "fixed", "passes", "ready", or commit based on stale or assumed results.
+**The Study section MUST end with a labeled `Final gate:` line** that names the command run and its result, or explicitly records the skip. Emit it even when the gate did not run:
+
+```text
+Final gate: PASS — <command> (e.g. python -m unittest discover tests, cargo test, pnpm test)
+Final gate: FAIL — <command>; <one-line cause>; routed to Fix loop or handed off
+Final gate: skipped because <reason>; best next command: <command-to-run-later>
+```
+
+Do not say "done", "fixed", "passes", "ready", or commit based on stale or assumed results, and do not omit the `Final gate:` line.
 
 ### 7. Commit / push discipline
 
@@ -172,8 +180,8 @@ Plan
 Study
 - Unit 1 targeted check (before/after edit): ...
 - Unit 2 targeted check: ...
-- Final gate: ...
 - Diff review: ...
+- Final gate: PASS — <command>   (or: Final gate: skipped because <reason>; best next command: <cmd>)
 
 Commit
 - <hash/message> or "not committed because <reason>"
@@ -218,8 +226,9 @@ Plan
 Study
 - Unit 1 targeted check (before edit): FAIL — test_calculate_total_uses_quantity expected 35, got 15. This confirms the test is failing for the named reason (quantity ignored), not for an unrelated cause.
 - Unit 1 targeted check (after edit): PASS — test_calculate_total_uses_quantity returns 35.
-- Unit 2 full gate: PASS — `python -m unittest discover tests` shows 2/2 tests passing; test_empty_cart_returns_zero unchanged.
+- Unit 2 targeted check: PASS — `python -m unittest tests.test_cart.CartTests.test_empty_cart_returns_zero` still passes.
 - Diff review: src/cart.py only; the `return sum(...)` line changed; no unrelated files; no rename of `calculate_total`.
+- Final gate: PASS — `python -m unittest discover tests` shows 2/2 tests passing; test_empty_cart_returns_zero unchanged.
 
 Commit
 - abc1234 Apply quantity in calculate_total per PLAN.md TODOs
