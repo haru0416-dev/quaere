@@ -13,7 +13,6 @@ license: MIT
 
 This is the security version of evidence-gating. Dangerous APIs, scary strings, stale advisories, and pattern matches are leads, not findings. A finding becomes actionable only when the audit can show why the property should hold, where an attacker crosses a boundary, which sink/state/guard fails, what impact follows under the threat model, and what counter-evidence was checked. If any link is missing, classify it as `potential`, `rejected`, or `inconclusive`.
 
-Design provenance for this v2 rewrite is summarized in `references/quaere-audit-v2-survey.md`; read it only when auditing why a procedure element exists.
 
 ## When to use
 
@@ -197,7 +196,7 @@ Tier does not override external-fact freshness. Even in Triage, if a finding rel
 
 7. `quaere-semantic` mapped the relevant code intent, invariants, failure modes, and connections for the critical path.
 
-**Tier promotion rule.** If a Triage finding has high blast radius — consensus break, funds movement, auth bypass, parser RCE, sandbox escape, key compromise, mass/bulk tenant data exposure, cross-tenant write, tenant impersonation, or multi-tenant secret leak — promote to Standard before marking `confirmed`. The list is canonical (matching ADR-0002's enumeration); do not rely on open-ended "similarly broad" phrasing — if a candidate finding does not fit one of these categories, it is single-tenant and does not require promotion regardless of the operational severity.
+**Tier promotion rule.** If a Triage finding has high blast radius — consensus break, funds movement, auth bypass, parser RCE, sandbox escape, key compromise, mass/bulk tenant data exposure, cross-tenant write, tenant impersonation, or multi-tenant secret leak — promote to Standard before marking `confirmed`. The list is canonical; do not rely on open-ended "similarly broad" phrasing — if a candidate finding does not fit one of these categories, it is single-tenant and does not require promotion regardless of the operational severity.
 
 ## Worked example
 

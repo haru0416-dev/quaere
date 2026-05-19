@@ -21,7 +21,7 @@ This is a tenant-isolation invariant derivable from the data model (every Invoic
 4. Missing guard: between `getInvoiceById` and `exportInvoicePDF`, a check of `invoice.organization_id === req.user.orgId` is required and absent.
 5. Impact: any user can export any invoice from any tenant. The PDF leaves the system as the response body.
 
-## Why this is a Triage-tier promotion case (per ADR-0002)
+## Why this is a Triage-tier promotion case
 
 The impact is **mass-tenant data exposure** — one of the canonical promotion triggers in the v2 Confirmation Rule. A Triage-tier audit MUST promote to Standard before marking `confirmed`. Standard tier additionally requires:
 

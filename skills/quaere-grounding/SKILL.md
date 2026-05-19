@@ -13,7 +13,6 @@ license: MIT
 
 This is not a stylistic rule. Model memory is not evidence for version-sensitive external facts: SOTA LLMs reach only 48–51% on version-conditioned generation, and even retrieval-augmented setups follow internal priors when retrieved docs disagree with parametric memory *(GitChameleon 2.0 — Misra et al. 2025; VersiCode — Wu et al. 2024; RustEvo² — Liang et al. 2025)*. Authority alone is also insufficient: lateral-reading research shows that single-source acceptance — even of high-authority sources — is the dominant failure mode of internet-era literacy *(Wineburg & McGrew 2017, Stanford History Education Group; Caulfield 2019, SIFT)*. The two-axis structure (source axis from the ranking, claim-credibility axis from probe + lateral check) follows the NATO Admiralty Code (STANAG 2511, source reliability A–F × information credibility 1–6); Anthropic's Citations API is a contemporary engineering instance of the same separation, evaluating output on factual accuracy and source-supports-claim as independent axes.
 
-Design provenance for this v2 rewrite is summarized in `references/quaere-grounding-v2-survey.md`; read it only when auditing why a procedure element exists.
 
 ## Boundary with quaere-evidence
 
@@ -23,7 +22,7 @@ Design provenance for this v2 rewrite is summarized in `references/quaere-ground
 
 The handoff from this skill should be a set of external constraints. The handoff from `quaere-evidence` should be a decision about claims, causes, or fixes.
 
-As of 2026-05, Anthropic's official documentation does not provide guidance for resolving "docs say X / installed types say Y" conflicts. The closest precedent is the `claude-api` skill's "add alongside, don't replace" rule for version-tied state, which this skill extends. (Provenance and design rationale live in `docs/adr/0003-skill-content-quality-via-quaere-grounding.md`.)
+As of 2026-05, Anthropic's official documentation does not provide guidance for resolving "docs say X / installed types say Y" conflicts. The closest precedent is the `claude-api` skill's "add alongside, don't replace" rule for version-tied state, which this skill extends.
 
 ## When to use
 

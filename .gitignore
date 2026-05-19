@@ -22,3 +22,7 @@ eval-results/
 .idea/
 .vscode/
 *.swp
+
+# Internal-only decision records and eval-driven analysis tasks
+docs/adr/
+docs/eval-tasks/

@@ -101,6 +101,18 @@ quaere update    # check for a newer release on GitHub
 quaere version   # print the CLI version
 ```
 
+### CLI behavior reference
+
+The v0.1.0 CLI follows these contracts:
+
+- **`quaere install` is additive.** Running `quaere install --skill quaere-semantic` and then `quaere install --skill quaere-audit` against the same `--target` accumulates both skills into the manifest. The manifest stays consistent with the union of (previously installed skills that still exist on disk) + (skills installed this run) + (skills already present and skipped). The manifest entries are sorted for deterministic diffs.
+- **Unknown `--skill` names are rejected early.** A typo like `--skill quaere-semantik` aborts with the list of available skills *before* anything is written. There is no partial-install fallback.
+- **`quaere doctor` orphan policy.** A directory in the install target that is not recorded in the manifest is surfaced as an orphan. Orphans whose name starts with `quaere-` are treated as errors (a misbehaving Quaere install). Orphans with any other name are informational only — the install target may be shared with other skill management tools.
+- **`quaere update` uses semantic version comparison** for the standard `X.Y.Z` form, falling back to string comparison when either side is not parseable as semver. The command never modifies the binary; it only prints upgrade instructions.
+- **Default `--repo` is `haru0416-dev/quaere`**. If you are tracking a fork, override it: `quaere update --repo your-fork/quaere`. The same applies to `scripts/install.sh` via the `QUAERE_REPO` environment variable.
+
+These contracts are exercised by the `tests/test_validator_parity.py` cross-check between the Python validator and the Rust doctor (CI job `parity`).
+
 ## Examples
 
 See [`examples/`](examples/) for realistic prompts and expected behavior patterns.
@@ -127,7 +139,7 @@ Run the local validator before publishing changes:
 python scripts/validate_skills.py
 ```
 
-The validator checks frontmatter, directory/name consistency, README coverage, line-count budget, and accidental `.agent-state/` inclusion. GitHub Actions runs the same validation on push and pull request (see ADR-0003).
+The validator checks frontmatter, directory/name consistency, README coverage, line-count budget, and accidental `.agent-state/` inclusion. GitHub Actions runs the same validation on push and pull request.
 
 ## Skill evaluation
 
@@ -150,16 +162,8 @@ Runner command templates are shell commands. They can print the agent response t
 - `$run_dir` — result directory
 - `$scenario_id`, `$skill`, `$mode` — run metadata
 
-Scenarios may include deterministic `assertions` (`contains`, `contains_any`, `not_contains`, `regex`, `exit_code`) for CI-friendly checks, in addition to the manual rubric in `expected`. Real-LLM eval runs are gated behind a manual workflow trigger and are not required to pass on every PR (see ADR-0003).
+Scenarios may include deterministic `assertions` (`contains`, `contains_any`, `not_contains`, `regex`, `exit_code`) for CI-friendly checks, in addition to the manual rubric in `expected`. Real-LLM eval runs are gated behind a manual workflow trigger and are not required to pass on every PR.
 
-## Project decisions
-
-Design and process decisions live in [`docs/adr/`](docs/adr/):
-
-- [ADR-0001](docs/adr/0001-rebrand-to-quaere.md) — Rebrand to Quaere
-- [ADR-0002](docs/adr/0002-distribution-stack.md) — Distribution stack (Rust CLI, releases, Homebrew, marketplace)
-- [ADR-0003](docs/adr/0003-test-strategy.md) — Test strategy (validator unit, golden, scenario assertions, manual LLM eval)
-- [ADR-0004](docs/adr/0004-new-repo-and-v0.1.md) — New repo and v0.1 release line
 
 ## License
 

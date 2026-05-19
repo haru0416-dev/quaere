@@ -15,7 +15,6 @@ This is not a stylistic rule. Paraphrasing implementation is not understanding, 
 
 The operational test: a piece of analysis is *understanding* only if it survives a semantic-preserving rewrite of the underlying code (rename a local, swap an equivalent loop form, replace an `if/else` with a ternary). If the rewrite would change your answer, you produced *paraphrase*. *(Operational definition adapted from arXiv 2504.04372 2025; preprint, applied as a working test rather than as authority.)*
 
-Design provenance for this v2 rewrite is summarized in `references/quaere-semantic-v2-survey.md`; read it only when auditing why a procedure element exists.
 
 ## Industry baseline
 
@@ -163,14 +162,13 @@ When the reason for code's shape is unclear, in this order:
 2. **Read callers (forward slice probe)** — calling context reveals the contract.
 3. **Look for code beacons** — recognizable plan signatures: cache-aside, double-check locking, retry-with-backoff, circuit breaker, builder, visitor. A beacon often reveals intent at lower cost than tests, because beacons compress historical engineering into a recognizable pattern. *(Brooks 1983.)*
 4. **Run `git blame` + read the commit message** — original author rationale.
-5. **Search for related ADRs / docs** — `docs/adr/`, `CHANGELOG`, `RFC`, `README`.
-6. **Use intent / protocol / lifetime question templates** *(Sillito, Murphy & De Volder 2008; LaToza & Myers 2010 — empirically the hardest developer questions are about intent and reachability)*:
+5. **Use intent / protocol / lifetime question templates** *(Sillito, Murphy & De Volder 2008; LaToza & Myers 2010 — empirically the hardest developer questions are about intent and reachability)*:
    - What protocol does this object follow? What states can it be in?
    - What is the lifetime of this state? Who creates it, who destroys it?
    - Who owns this object's mutation? Single writer, multiple writers, none after construction?
    - What invariants does the *caller* assume vs what the *callee* enforces?
    - What is the reachability — who can reach this code and under what conditions?
-7. **As a last resort, ask the user.** Better one question than a fabricated explanation.
+6. **As a last resort, ask the user.** Better one question than a fabricated explanation.
 
 ## Common drift modes
 
