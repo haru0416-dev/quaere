@@ -185,15 +185,15 @@ Apply both axes — source axis (Step 5) and claim-credibility axis (Steps 7 + 8
 
 Only `confirmed` claims become implementation constraints. `version-mismatched`, `stale`, `conflicted`, and `inconclusive` claims must not be used as if true.
 
-## No-network fallback
+### 10. No-network fallback strategy
 
-Three steps in order *(adapted from Anthropic's `claude-api/shared/live-sources.md` Fallback Strategy)*:
+When external access fails or is unavailable, apply these three steps **in order** *(adapted from Anthropic's `claude-api/shared/live-sources.md` Fallback Strategy)* before falling through to `inconclusive`:
 
-1. Use cached / vendored content with the cache date stated explicitly. Do not hide the staleness.
-2. Inform the user that data may be outdated; do not assert otherwise. The dual-axis gate now leans entirely on local evidence; flag every claim that depends on an unreachable external source.
-3. Point the user to canonical URLs they can fetch and report back. Provide the exact URL and what to look for.
+1. **Cached / vendored content with explicit date.** Use the locally checked-in mirror (e.g. `docs/<name>-<version>.md`) and state the cache date verbatim. Do not hide staleness.
+2. **Inform the user that data may be outdated.** The dual-axis gate now leans entirely on local evidence; flag every claim that depends on an unreachable external source.
+3. **Name the canonical URLs the user can fetch and report back.** Provide the exact URL and what to look for, even though it could not be fetched here.
 
-If none of these resolve the fact, mark `inconclusive`. Do not rely on model memory as a substitute.
+If none of these resolve the fact, mark `inconclusive`. Do not rely on model memory as a substitute. The output must show this fallback was attempted — emit a labeled `No-network fallback strategy:` block (see the Output format below) when web access is unavailable.
 
 ## Worked example
 
@@ -278,6 +278,10 @@ External grounding
 - External surface:
 - Stale risk:
 - Local anchor:
+- No-network fallback strategy: applied|not needed
+  1. cached/vendored content (path + cache date) or N/A
+  2. user-facing stale-data notice or N/A
+  3. canonical URL(s) for the user to fetch and report back, or N/A
 
 Claims
 - EG-001:
