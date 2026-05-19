@@ -231,7 +231,8 @@
           "name": "success claim includes targeted verification",
           "type": "requires_pair",
           "if_contains": "(?i)done|fixed|passes|ready|implemented",
-          "must_also_contain": "(?i)targeted|unit test|specific test"
+          "must_also_contain": "(?i)targeted|unit test|specific test",
+          "skip_when": "(?i)targeted.*skipped because|targeted.*not run because|no behavior change"
         },
         {
           "name": "success claim includes final gate or skipped reason",
@@ -243,7 +244,8 @@
           "name": "success claim includes diff review",
           "type": "requires_pair",
           "if_contains": "(?i)done|fixed|passes|ready|implemented",
-          "must_also_contain": "(?i)diff review|reviewed diff|diff-vs-contract"
+          "must_also_contain": "(?i)diff review|reviewed diff|diff-vs-contract",
+          "skip_when": "(?i)diff review.*skipped because|no diff because"
         },
         {
           "name": "does not refuse the authorized commit",

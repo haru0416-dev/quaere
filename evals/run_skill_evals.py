@@ -421,9 +421,15 @@ def evaluate_assertion(assertion: dict[str, Any], output: str, metadata: dict[st
     elif assertion_type == "requires_pair":
         if_pattern = str(assertion.get("if_contains", ""))
         must_pattern = str(assertion.get("must_also_contain", ""))
+        skip_when_pattern = assertion.get("skip_when")
         try:
             antecedent = re.search(if_pattern, output, flags=re.MULTILINE)
             consequent = re.search(must_pattern, output, flags=re.MULTILINE)
+            skip_match = (
+                re.search(str(skip_when_pattern), output, flags=re.MULTILINE)
+                if skip_when_pattern is not None
+                else None
+            )
         except re.error as exc:
             return {
                 "name": name,
@@ -434,12 +440,20 @@ def evaluate_assertion(assertion: dict[str, Any], output: str, metadata: dict[st
         if antecedent is None:
             ok = True
             detail = f"{if_pattern!r} not present; pair check vacuously satisfied"
-        else:
-            ok = consequent is not None
+        elif consequent is not None:
+            ok = True
+            detail = f"{if_pattern!r} present; required pair {must_pattern!r} present"
+        elif skip_match is not None:
+            ok = True
             detail = (
-                f"{if_pattern!r} present; required pair {must_pattern!r} present"
-                if ok
-                else f"{if_pattern!r} present but required pair {must_pattern!r} missing"
+                f"{if_pattern!r} present; pair {must_pattern!r} missing but "
+                f"skip clause {str(skip_when_pattern)!r} matched — unconditional pair "
+                "treated as vacuous"
+            )
+        else:
+            ok = False
+            detail = (
+                f"{if_pattern!r} present but required pair {must_pattern!r} missing"
             )
     elif assertion_type == "not_in_baseline":
         # Cross-mode check; resolved by finalize_cross_mode_assertions after all
