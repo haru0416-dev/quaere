@@ -419,6 +419,15 @@ def evaluate_assertion(assertion: dict[str, Any], output: str, metadata: dict[st
         ok = found >= min_count
         detail = f"required at least {min_count} matches of {pattern!r}; found {found}"
     elif assertion_type == "requires_pair":
+        # `skip_when` (optional) lets the assertion pass when the antecedent
+        # is present, the consequent is missing, but the agent explicitly
+        # declared a vacuous-pair branch (e.g. "Final gate: skipped because
+        # ..."). Authors MUST anchor `skip_when` tightly to the specific
+        # vacuous branch — a bare pattern like `(?i)skipped` would silently
+        # flip fails to passes whenever the word appears anywhere in output.
+        # Anchor on the label that owns the skip (e.g. `Final gate: skipped
+        # because`, `targeted.*skipped because`, `diff review.*skipped
+        # because`), not on the skip token alone.
         if_pattern = str(assertion.get("if_contains", ""))
         must_pattern = str(assertion.get("must_also_contain", ""))
         skip_when_pattern = assertion.get("skip_when")

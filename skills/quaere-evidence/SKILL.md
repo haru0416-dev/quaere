@@ -149,18 +149,26 @@ Use RCA tools as hypothesis generators, not proof. 5 Whys can expose a chain, Is
 
 Use Review Claims for PR comments, security risks, API contract mismatches, data-loss risks, concurrency hazards, or design review issues. **Every Review Claim MUST contain these 10 fields, each on its own labeled line, in this exact order:**
 
+The 10 fields form two phases. The *analytical* phase (Claim → Backing) builds the positive argument; the *falsifiability* phase (Qualifier → Disconfirming probe) records every channel through which the argument could fail. Both phases are required — the analytical phase without the falsifiability phase is advocacy, not review.
+
 ```text
 C-001: <short title>
+
+# Analytical phase — the claim and its evidential support
 Claim: <the actionable concern>
 Data/Evidence: <file:line, diff, log, repro, spec, or trace>
 Warrant: <why the evidence implies the risk>
 Backing: <source-type> — <reference>
+
+# Falsifiability phase — how the claim could be defeated
 Qualifier: high | medium | low confidence, with why
 Rebuttal / false-positive reason: <what could defeat the claim>
-Suggested probe: <supporting + disconfirming check, or pointer to the labeled lines below>
+Suggested probe: <supporting check whose expected result would corroborate the claim>
 Falsifier: <observation that would defeat the claim>
-Disconfirming probe: <check whose unexpected result would defeat>
+Disconfirming probe: <check whose unexpected result would defeat the claim>
 ```
+
+The two `# Analytical phase` / `# Falsifiability phase` markers are visual cues; the contract is the 10 labeled lines, not the comment headers. `Suggested probe:` and `Disconfirming probe:` are NOT the same line. The first names a *supporting* check (success corroborates the claim); the second names a *defeating* check (success refutes the claim). Collapsing them removes the falsifiability gate.
 
 `<source-type>` MUST be one of `spec | invariant | test | policy | contract | RFC | ADR`. Writing `Backing: docs say so` or `Backing: it seems likely` does not satisfy the contract — name the source type, then the concrete reference (e.g., `Backing: contract — src/reservations/contract.md:17 requires HTTP 400 for startTime >= endTime`).
 
