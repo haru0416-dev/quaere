@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use crate::manifest::Manifest;
 use crate::paths;
 
-static SKILLS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../skills");
+static SKILLS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/skills");
 
 #[derive(ClapArgs)]
 pub struct Args {
