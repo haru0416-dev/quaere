@@ -235,6 +235,17 @@ extras は (シナリオ id、アサーション名) で名前マッチしてか
 
 実 LLM の eval は manual workflow trigger でしか走らない。PR ごとに通す義務はない。
 
+## 外部ベンチマーク (Roadmap)
+
+in-tree の eval は PR ごとに通すには軽くて十分だが、第三者検証の代わりにはならない。優先順位つきで以下の 4 つを次フェーズ以降の組み込み候補としている。
+
+1. **[Terminal-Bench v2](https://www.tbench.ai/)** — SWE / セキュリティ / データ / sysadmin にまたがる 89 個の端末タスク。`quaere-execution` と `quaere-grounding` の領域そのもので、最も Δ が出やすい想定。v0.3 ターゲット。
+2. **[SWE-bench Verified](https://www.swebench.com/)** — 人手で正解確認された 500 個の GitHub issue パッチ。コーディングエージェント界隈の信頼度の基準。いずれは避けて通れない。eval host に 120GB ストレージ・16GB RAM・8 CPU と API 予算が要る。v1.0 ターゲット。
+3. **[SkillsBench](https://www.skillsbench.ai/)** — 3D / ロボティクス / セキュリティ PCAP / エネルギーなど 84 個の domain skill タスク。提出単位は「スキルを使うエージェント」。domain 純度が高い分、Quaere の process 補正は Δ が小さく出る可能性が高い。追跡だけ。
+4. **SWE-Bench Pro** — Verified の難化版。Verified を通してから検討。
+
+Quaere の主張は「process-correction が deliberation 軸でエージェントを底上げする」。Terminal-Bench はこれを直接、SWE-bench Verified は長文パッチ生成への汎化を間接的に検証する。どちらの数字も出るまで、公開できる根拠は上の in-tree eval だけ。
+
 ## ライセンス
 
 MIT。詳細は [`LICENSE`](LICENSE) を参照。
