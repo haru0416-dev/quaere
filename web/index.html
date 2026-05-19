@@ -52,6 +52,11 @@
     p code { background: var(--bg-code); padding: .1em .35em; border-radius: 3px; }
     a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
     a:hover { text-decoration-thickness: 2px; }
+    a:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+      border-radius: 2px;
+    }
     table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
     th, td { text-align: left; padding: .5rem .75rem; border-bottom: 1px solid var(--border); }
     th { font-weight: 600; color: var(--fg-dim); font-size: .85rem; text-transform: uppercase; letter-spacing: .03em; }
@@ -59,6 +64,7 @@
   </style>
 </head>
 <body>
+  <main>
   <h1>Quaere <small>/ˈkwae̯.re/ — "ask"</small></h1>
   <p class="tagline">Process-correction skills that make coding agents ask before they act.</p>
 
@@ -84,13 +90,16 @@ quaere doctor    # verify install integrity
 quaere update    # check for a newer release
 quaere version   # print version</code></pre>
 
-  <h2>Links</h2>
-  <ul>
-    <li><a href="https://github.com/haru0416-dev/quaere">GitHub repo</a></li>
-    <li><a href="https://github.com/haru0416-dev/quaere/releases/latest">Latest release</a></li>
-    <li><a href="https://github.com/haru0416-dev/quaere/blob/main/README.md">README</a></li>
-    <li><a href="https://github.com/haru0416-dev/quaere/blob/main/CHANGELOG.md">CHANGELOG</a></li>
-  </ul>
+  <nav aria-label="Project resources">
+    <h2>Links</h2>
+    <ul>
+      <li><a href="https://github.com/haru0416-dev/quaere">GitHub repo</a></li>
+      <li><a href="https://github.com/haru0416-dev/quaere/releases/latest">Latest release</a></li>
+      <li><a href="https://github.com/haru0416-dev/quaere/blob/main/README.md">README</a></li>
+      <li><a href="https://github.com/haru0416-dev/quaere/blob/main/CHANGELOG.md">CHANGELOG</a></li>
+    </ul>
+  </nav>
+  </main>
 
   <footer>
     Quaere is MIT-licensed. Latin <em>quaere</em>: "ask", "seek", "interrogate".
