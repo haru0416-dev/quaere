@@ -48,6 +48,8 @@ All four Stream A targeted assertion flips confirmed across the runs (`regex dis
 ### Distribution
 
 - Homebrew tap [`haru0416-dev/homebrew-quaere`](https://github.com/haru0416-dev/homebrew-quaere) is live with a working formula. Install via `brew install haru0416-dev/quaere/quaere`. The in-tree `Formula/quaere.rb` stub is removed; the tap repository is the canonical source going forward.
+- First publish to crates.io as [`quaere-cli`](https://crates.io/crates/quaere-cli). Install via `cargo install quaere-cli && quaere install`. The v0.1.0 CHANGELOG previously claimed a crates.io publish in error; v0.2.0 is the first version actually on the registry.
+- `cli/Cargo.toml` bumped to `0.2.0` so the release binary self-identifies correctly. The v0.1.0 binary embedded version was correctly `0.1.0`, but a missed bump at tag time would have caused v0.2.0 binaries to report `quaere 0.1.0` — caught and fixed before the release artifacts were finalized.
 
 ### Web
 
@@ -98,7 +100,6 @@ Initial release. Quaere is a process-correction skill set for coding agents, rel
 - `scripts/install.sh` — POSIX `curl | sh` installer with SHA256 verification, four-target detection, and PATH hint.
 - `.github/workflows/release.yml` — tag-triggered cross-platform build (x86_64 + aarch64 for Linux and macOS), skill tarball, SHA256SUMS, and `gh release create`.
 - `Formula/quaere.rb` — Homebrew formula stub (tap repo planned for v0.2).
-- Published on crates.io as `quaere-cli` for `cargo install`.
 
 #### Evaluation infrastructure
 
