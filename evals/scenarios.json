@@ -768,7 +768,7 @@
         {
           "name": "audit tier declared in canonical Tier: form on its own line",
           "type": "regex",
-          "pattern": "(?im)^\\s*(?:[-*#]+\\s*)?(?:Audit tier|Tier)\\s*:\\s*(?:Triage|Standard|Deep)\\b"
+          "pattern": "(?im)^\\s*(?:[-*#]+\\s*)?[*_]*\\s*(?:Audit tier|Tier)\\s*[*_]*\\s*:[*_\\s]*?(?:Triage|Standard|Deep)\\b"
         },
         {
           "name": "findings classified with explicit labeled lines",
@@ -802,13 +802,13 @@
         {
           "name": "Standard tier requires grounding and evidence-gated review",
           "type": "requires_pair",
-          "if_contains": "(?im)^\\s*(?:[-*#]+\\s*)?(?:Audit tier|Tier)\\s*:\\s*Standard\\b",
+          "if_contains": "(?im)^\\s*(?:[-*#]+\\s*)?[*_]*\\s*(?:Audit tier|Tier)\\s*[*_]*\\s*:[*_\\s]*?Standard\\b",
           "must_also_contain": "(?ims)(?=.*^\\s*[-*]?\\s*(?:External grounding|quaere-grounding)(?: decision| status)?\\s*:\\s*(?:confirmed|version-mismatched|stale|conflicted|inconclusive|no external facts? required))(?=.*^\\s*[-*]?\\s*(?:Evidence-gated review|quaere-evidence)(?: decision| status)?\\s*:\\s*(?:failed to reject|survived|confirmed|defense|disconfirm|not rejected))"
         },
         {
           "name": "Deep tier requires semantic review plus Standard companions",
           "type": "requires_pair",
-          "if_contains": "(?im)^\\s*(?:[-*#]+\\s*)?(?:Audit tier|Tier)\\s*:\\s*Deep\\b",
+          "if_contains": "(?im)^\\s*(?:[-*#]+\\s*)?[*_]*\\s*(?:Audit tier|Tier)\\s*[*_]*\\s*:[*_\\s]*?Deep\\b",
           "must_also_contain": "(?ims)(?=.*^\\s*[-*]?\\s*(?:Semantic review|quaere-semantic)(?: decision| status)?\\s*:\\s*(?:mapped|invariants|failure modes|connections))(?=.*^\\s*[-*]?\\s*(?:Evidence-gated review|quaere-evidence)(?: decision| status)?\\s*:\\s*(?:failed to reject|survived|confirmed|defense|disconfirm|not rejected))(?=.*^\\s*[-*]?\\s*(?:External grounding|quaere-grounding)(?: decision| status)?\\s*:\\s*(?:confirmed|version-mismatched|stale|conflicted|inconclusive|no external facts? required))"
         },
         {
