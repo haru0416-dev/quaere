@@ -106,13 +106,15 @@ quaere install
 
 `cargo install` builds the CLI from source and the second command extracts the bundled skills.
 
-### Homebrew (planned v0.2)
+### Homebrew (deferred)
 
-A `Formula/quaere.rb` stub exists in this repo; the tap repository `haru0416-dev/homebrew-quaere` will be set up alongside the v0.2 release, after which:
+A `Formula/quaere.rb` stub exists in this repo. Activation is gated on standing up the tap repository `haru0416-dev/homebrew-quaere`, which is not yet published. Once it is, the formula will be promoted from stub to working and this section will list:
 
 ```bash
 brew install haru0416-dev/quaere/quaere
 ```
+
+Until then, prefer the curl one-liner or `cargo install quaere-cli`.
 
 ### Manual (source checkout)
 
@@ -133,6 +135,8 @@ quaere doctor    # verify frontmatter, names, line budget, orphans
 quaere update    # check for a newer release on GitHub
 quaere version   # print the CLI version
 ```
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the per-version change history; the `Unreleased` section is the next-up shipping list.
 
 ### CLI behavior reference
 
@@ -176,13 +180,16 @@ The validator checks frontmatter, directory/name consistency, README coverage, l
 
 ## Skill evaluation
 
-`evals/scenarios.json` contains 14 portable scenario prompts. Run them through any local agent CLI by providing a command template:
+`evals/scenarios.json` contains 14 portable scenario prompts. Seven of them rely on workspace fixtures under [`eval-fixtures/`](eval-fixtures/) — small, vendored projects that give the agent concrete local evidence (pinned `package.json`, vendored docs, fake CLIs, spec files, etc.). The runner copies the fixture into an isolated directory per run so concurrent evaluations do not interfere.
+
+Run scenarios through any local agent CLI by providing a command template. `--output-dir` should be absolute so the runner can read `$prompt_file` from inside the workspace `cwd`:
 
 ```bash
 python evals/run_skill_evals.py \
   --runner 'codex=codex exec - < $prompt_file' \
   --scenario sdk-version-grounding \
-  --mode both
+  --mode both \
+  --output-dir "$(pwd)/eval-results/$(date -u +%Y%m%dT%H%M%SZ)"
 ```
 
 The runner writes isolated prompts, stdout/stderr, metadata, and per-assertion grades under `eval-results/<timestamp>/`. `--mode both` runs a baseline prompt without the skill and a with-skill prompt that injects the relevant `SKILL.md`.
@@ -195,7 +202,21 @@ Runner command templates are shell commands. They can print the agent response t
 - `$run_dir` — result directory
 - `$scenario_id`, `$skill`, `$mode` — run metadata
 
-Scenarios carry deterministic `assertions` (`contains`, `contains_any`, `not_contains`, `regex`, `ordered_sections`, `requires_pair`, `min_section_count`, `not_in_baseline`, `exit_code`) for CI-friendly checks, in addition to a manual rubric in `expected`. Real-LLM eval runs are gated behind a manual workflow trigger and are not required to pass on every PR.
+Scenarios carry deterministic `assertions` for CI-friendly checks, in addition to a manual rubric in `expected`:
+
+| assertion type | purpose |
+| --- | --- |
+| `contains` / `contains_any` / `not_contains` | literal substring presence or absence |
+| `regex` | one regex match anywhere in output |
+| `ordered_sections` | a list of regex patterns must match in that order |
+| `min_section_count` | a regex must match at least *N* times |
+| `requires_pair` | if `if_contains` matches, then `must_also_contain` (or, optionally, `skip_when`) must also match |
+| `not_in_baseline` | a pattern that *only* the with-skill mode should match (signal isolation) |
+| `exit_code` | the runner exit code must equal the given integer |
+
+The `skip_when` clause on `requires_pair` lets an assertion treat a labeled skip branch (e.g. `Final gate: skipped because <reason>`) as vacuously satisfied. Anchor `skip_when` tightly — the bare token `(?i)skipped` would silently flip fails to passes whenever the word appears anywhere in output.
+
+Real-LLM eval runs are gated behind a manual workflow trigger and are not required to pass on every PR.
 
 ## License
 
