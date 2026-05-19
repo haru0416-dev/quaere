@@ -459,7 +459,8 @@
     {
       "id": "no-web-local-grounding",
       "skill": "quaere-grounding",
-      "prompt": "Web access is unavailable. Check whether this CLI option is supported before changing the script.",
+      "prompt": "Web access is unavailable. Inspect this workspace and tell me which slimsync option to use to exclude every pattern listed in .syncignore. Ground your answer in local evidence only (the pinned binary, the lockfile, and the cached manual). Do not assume options from similar tools (rsync) apply.",
+      "workspace": "../eval-fixtures/no-web-local-grounding",
       "expected": [
         "applies the 3-step Fallback Strategy (cached content with date / inform user data may be outdated / point to canonical URLs)",
         "uses local CLI --version or help output as the executable probe",

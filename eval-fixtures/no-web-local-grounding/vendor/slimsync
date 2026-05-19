@@ -1,0 +1,41 @@
+#!/bin/sh
+# slimsync 0.7.3 — minimal fixture stand-in. Real behavior is not needed
+# for the eval; only --version and --help are observable to the agent.
+
+case "$1" in
+  --version|-V)
+    echo "slimsync 0.7.3"
+    exit 0
+    ;;
+  --help|-h|"")
+    cat <<'EOF'
+slimsync 0.7.3 — minimal file synchronizer
+
+USAGE:
+    slimsync [OPTIONS] <SRC> <DST>
+
+OPTIONS:
+    -V, --version            Print version and exit.
+    -h, --help               Print this help and exit.
+    -n, --dry-run            Show what would be copied without copying.
+    -v, --verbose            Print each transferred path.
+        --exclude PATTERN    Skip paths matching PATTERN. Repeatable;
+                             evaluated in the order given.
+        --include PATTERN    Force-include PATTERN even when an earlier
+                             --exclude would have skipped it.
+
+NOT SUPPORTED in 0.7.3:
+    --exclude-from           (planned for 0.9; use repeated --exclude)
+    --include-from           (planned for 0.9; use repeated --include)
+    --filter                 (planned for 1.0)
+
+CANONICAL DOCS:
+    https://slimsync.example/docs/0.7.3/options.html
+EOF
+    exit 0
+    ;;
+  *)
+    echo "slimsync: unsupported argument in fixture mode: $1" >&2
+    exit 2
+    ;;
+esac
