@@ -29,6 +29,10 @@ Eval-driven quality pass on the v0.1.0 skill set and harness. The 9 with-skill r
 - `evals/scenarios.ja.json` — Japanese-locale alternates for the eight assertions whose tokens had previously been embedded directly into `scenarios.json`. The main file is now English-only; locale tokens are merged in only when the user passes `--scenarios-extra evals/scenarios.ja.json`. This keeps the public surface single-language while preserving the language-bias-removal goal from ADR-0006 Stream B-1.
 - `tests/test_run_skill_evals.py` — new unit tests covering the `skip_when` clause and the `--scenarios-extra` merge semantics (regex alternation, per-position alternation with empty-slot pass-through, array concatenation, type mismatch and length mismatch errors).
 
+### Distribution
+
+- Homebrew tap [`haru0416-dev/homebrew-quaere`](https://github.com/haru0416-dev/homebrew-quaere) is now live with a working formula for v0.1.0. Install via `brew install haru0416-dev/quaere/quaere`. The in-tree `Formula/quaere.rb` stub is removed; the tap repository is the canonical source going forward.
+
 ### Skipped
 
 - ADR-0006 Stream B-5 (language-tagged assertion sets) is intentionally not implemented in this release. Stream B-1's alternation approach already covers the dual-language need without scenario-level duplication; revisit only if a third language or significantly larger token sets are added.

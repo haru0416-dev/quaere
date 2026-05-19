@@ -106,15 +106,14 @@ quaere install
 
 `cargo install` builds the CLI from source and the second command extracts the bundled skills.
 
-### Homebrew (deferred)
-
-A `Formula/quaere.rb` stub exists in this repo. Activation is gated on standing up the tap repository `haru0416-dev/homebrew-quaere`, which is not yet published. Once it is, the formula will be promoted from stub to working and this section will list:
+### Homebrew
 
 ```bash
 brew install haru0416-dev/quaere/quaere
+quaere install
 ```
 
-Until then, prefer the curl one-liner or `cargo install quaere-cli`.
+The formula lives in the dedicated tap repository [`haru0416-dev/homebrew-quaere`](https://github.com/haru0416-dev/homebrew-quaere). It pulls the same release tarballs as the curl installer and verifies them against the recorded `SHA256SUMS`. `quaere install` then extracts the skill set to `~/.claude/skills/`.
 
 ### Manual (source checkout)
 

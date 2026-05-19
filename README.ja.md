@@ -108,15 +108,14 @@ quaere install
 
 二つ目で内蔵スキルを展開する。
 
-### Homebrew (準備中)
-
-`Formula/quaere.rb` のスタブはリポジトリに置いてある。tap リポジトリ `haru0416-dev/homebrew-quaere` を立ち上げた時点で formula を有効化し、このセクションに以下を追記する予定:
+### Homebrew
 
 ```bash
 brew install haru0416-dev/quaere/quaere
+quaere install
 ```
 
-それまでは curl ワンライナーか `cargo install quaere-cli` を使う。
+formula は専用 tap リポジトリ [`haru0416-dev/homebrew-quaere`](https://github.com/haru0416-dev/homebrew-quaere) にある。curl インストーラと同じ release tarball を取得し、`SHA256SUMS` と照合する。`quaere install` でスキル本体を `~/.claude/skills/` に展開する。
 
 ### 手動 (ソース取得)
 
