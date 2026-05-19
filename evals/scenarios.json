@@ -761,20 +761,26 @@
           ]
         },
         {
-          "name": "audit tier declared",
-          "type": "contains_any",
-          "texts": ["Triage", "Standard", "Deep", "Tier:"]
+          "name": "audit tier declared in exact Tier: form on its own line",
+          "type": "regex",
+          "pattern": "(?im)^\\s*(?:[-*]\\s*)?(?:Audit tier|Tier)\\s*:\\s*(?:Triage|Standard|Deep)\\s*$"
         },
         {
-          "name": "findings classified",
-          "type": "contains_any",
-          "texts": ["confirmed", "potential", "rejected", "inconclusive", "Confirmed", "Potential", "Rejected", "Inconclusive"]
+          "name": "findings classified with explicit labeled lines",
+          "type": "regex",
+          "pattern": "(?im)^\\s*(?:[-*#]+\\s*)?(?:Confirmed|Potential|Rejected|Inconclusive)\\b\\s*[:\\-(]"
         },
         {
           "name": "confirmed finding paired with evidence and gates",
           "type": "requires_pair",
           "if_contains": "(?i)\\bconfirmed\\b",
-          "must_also_contain": "(?i)evidence|repro|trace|proof|reachab"
+          "must_also_contain": "(?i)evidence|repro|trace|proof|reachab|証拠|再現"
+        },
+        {
+          "name": "confirmed finding references a derived security property or spec clause",
+          "type": "requires_pair",
+          "if_contains": "(?im)^\\s*(?:[-*]\\s*)?Confirmed\\b",
+          "must_also_contain": "(?i)(?:Property\\s+P-?\\d|Security Property|spec(?:ification)?(?:\\s+§|\\s+section|\\s+line|\\s+clause|\\s+requirement|\\s*\\.\\s*md)|RFC\\s+\\d|invariant\\s+I-?\\d|セキュリティプロパティ|プロパティ\\s*P-?\\d)"
         },
         {
           "name": "finding classification paired with severity or confidence",
