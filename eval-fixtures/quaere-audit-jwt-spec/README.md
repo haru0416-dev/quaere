@@ -42,7 +42,7 @@ This audit can plausibly be performed at any tier:
 - **Standard** — adds `quaere-grounding` (no version-sensitive external fact required if the spec is fully local) + `quaere-evidence` defense pass.
 - **Deep** — adds `quaere-semantic` of the verifier and any callers.
 
-The findings are not mass-tenant data exposure per se (the verifier is one component, not a multi-tenant system); promotion is not automatic. However, "auth bypass" is on the ADR-0002 promotion list — accepting an aud-mismatched token as authenticated *is* an auth bypass against the receiving service. The audit may reasonably promote on this ground.
+The findings are not mass-tenant data exposure per se (the verifier is one component, not a multi-tenant system); promotion is not automatic. However, "auth bypass" is on the canonical promotion list — accepting an aud-mismatched token as authenticated *is* an auth bypass against the receiving service. The audit may reasonably promote on this ground.
 
 ## What the audit should NOT do
 

@@ -13,7 +13,6 @@ license: MIT
 
 This is not ceremony. Review and debugging drift toward confirmation: once an agent sees a plausible cause, it collects facts that fit and edits before testing whether another explanation fits better. The gate is simple: before acting, state what would make the hypothesis or review claim wrong, run or name the smallest probe that could reveal that, then decide. If a claim cannot be falsified at the current scope, label it `inconclusive` or hand it off; do not promote it by sounding confident.
 
-Design provenance for this v2 rewrite is summarized in `references/quaere-evidence-v2-survey.md`; read it only when auditing why a procedure element exists.
 
 ## When to use
 

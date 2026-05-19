@@ -1,8 +1,8 @@
 # Quaere Homebrew formula (stub).
 #
-# Per ADR-0002, this formula is staged in the main repo for v0.1.0 and
+# This formula is staged in the main repo for v0.1.0 and is intended
 # is intended to be moved to a dedicated `homebrew-quaere` tap repo in
-# v0.2 so users can run:
+# to be moved to a dedicated `homebrew-quaere` tap repo in v0.2 so users can run:
 #
 #     brew install haru0416-dev/quaere/quaere
 #

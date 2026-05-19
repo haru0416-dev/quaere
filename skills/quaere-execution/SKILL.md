@@ -13,7 +13,6 @@ license: MIT
 
 This is not a paperwork rule. Implementation drift usually happens after the edit: the agent sees a green-looking result, forgets which requirement justified each change, and declares done before studying the actual diff. The loop is Plan → Do → Study → Act: predict what will prove the unit, make the smallest scoped edit, compare the observed result to the prediction, then either fix, split, or hand off. A passing broad suite is useful, but it does not replace the targeted check or the scope review.
 
-Design provenance for this v2 rewrite is summarized in `references/quaere-execution-v2-survey.md`; read it only when auditing why a procedure element exists.
 
 ## When to use
 
