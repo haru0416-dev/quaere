@@ -365,6 +365,78 @@ class AssertionTypesTest(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual(_load_grade(output_dir / "f", "pair-violated", "with-skill")["status"], "fail")
 
+    def test_requires_pair_skip_when_clause_passes_when_consequent_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            skills_dir = temp_path / "skills"
+            _make_demo_skill(skills_dir)
+            scenarios = temp_path / "scenarios.json"
+            output_dir = temp_path / "results"
+            _write_scenarios(
+                scenarios,
+                [
+                    {
+                        "id": "pair-skipped",
+                        "skill": "demo",
+                        "prompt": "x",
+                        "expected": [],
+                        "assertions": [
+                            {
+                                "name": "claim with skip clause",
+                                "type": "requires_pair",
+                                "if_contains": "confirmed",
+                                "must_also_contain": "evidence",
+                                "skip_when": "(?i)skipped because",
+                            }
+                        ],
+                    },
+                    {
+                        "id": "pair-skipped-but-still-no-skip-clause",
+                        "skill": "demo",
+                        "prompt": "x",
+                        "expected": [],
+                        "assertions": [
+                            {
+                                "name": "consequent missing and no skip clause matches",
+                                "type": "requires_pair",
+                                "if_contains": "confirmed",
+                                "must_also_contain": "evidence",
+                                "skip_when": "(?i)skipped because",
+                            }
+                        ],
+                    },
+                ],
+            )
+            # Antecedent present, consequent missing, but skip_when matches → pass.
+            completed = _run(
+                [
+                    "--scenarios", str(scenarios),
+                    "--skills-dir", str(skills_dir),
+                    "--scenario", "pair-skipped",
+                    "--runner",
+                    "fake=printf 'confirmed; full suite skipped because production replay is unsafe\\n'",
+                    "--output-dir", str(output_dir / "s"),
+                ],
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(_load_grade(output_dir / "s", "pair-skipped", "with-skill")["status"], "pass")
+
+            # Antecedent present, consequent missing, skip_when also absent → fail.
+            completed = _run(
+                [
+                    "--scenarios", str(scenarios),
+                    "--skills-dir", str(skills_dir),
+                    "--scenario", "pair-skipped-but-still-no-skip-clause",
+                    "--runner", "fake=printf 'confirmed\\n'",
+                    "--output-dir", str(output_dir / "nsk"),
+                ],
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(
+                _load_grade(output_dir / "nsk", "pair-skipped-but-still-no-skip-clause", "with-skill")["status"],
+                "fail",
+            )
+
     def test_not_in_baseline_evaluates_cross_mode(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)
