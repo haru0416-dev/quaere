@@ -130,31 +130,41 @@ Validation is broken.
 
 Use Hypotheses for possible root causes: why a test fails, why a regression appears, why a race occurs, or why a system behaves differently than expected.
 
-Each hypothesis should name:
+**Every Hypothesis MUST contain these 6 fields, each on its own labeled line, in this exact order:**
 
-- based-on Findings
-- prediction if true
-- what would falsify or narrow it
-- at least one alternative hypothesis when the evidence is ambiguous
+```text
+H-001: <short title>
+Based on: <Finding IDs>
+Prediction: <result if the hypothesis is true>
+Falsifier: <observation that would defeat the hypothesis>
+Disconfirming probe: <command or check whose unexpected result would falsify>
+Alternative: <competing hypothesis, or "none" when no plausible alternative exists>
+```
+
+`Falsifier:` and `Disconfirming probe:` are mandatory — naming what would defeat the hypothesis is what makes it falsifiable. A hypothesis missing either line is a guess.
 
 Use RCA tools as hypothesis generators, not proof. 5 Whys can expose a chain, Ishikawa/fishbone can enumerate cause categories, and fault-tree analysis can model AND/OR preconditions for complex failures. None of them confirms a cause until probes validate the leaves.
 
 ### 3. Review Claims — actionable concerns with argument structure
 
-Use Review Claims for PR comments, security risks, API contract mismatches, data-loss risks, concurrency hazards, or design review issues. **Every Review Claim MUST contain these 8 fields, each on its own labeled line, in this exact order:**
+Use Review Claims for PR comments, security risks, API contract mismatches, data-loss risks, concurrency hazards, or design review issues. **Every Review Claim MUST contain these 10 fields, each on its own labeled line, in this exact order:**
 
 ```text
 C-001: <short title>
 Claim: <the actionable concern>
 Data/Evidence: <file:line, diff, log, repro, spec, or trace>
 Warrant: <why the evidence implies the risk>
-Backing: <spec, invariant, test, policy, or known contract that justifies the warrant>
+Backing: <source-type> — <reference>
 Qualifier: high | medium | low confidence, with why
 Rebuttal / false-positive reason: <what could defeat the claim>
-Suggested probe: <supporting + disconfirming check>
+Suggested probe: <supporting + disconfirming check, or pointer to the labeled lines below>
+Falsifier: <observation that would defeat the claim>
+Disconfirming probe: <check whose unexpected result would defeat>
 ```
 
-The format is not a "shape" or a "style" — it is the contract. Drop or reorder a field and the claim is incomplete. Most missed in practice: **Backing** (the spec/invariant/test/contract that justifies the warrant — without it the warrant is a naked assertion that the data means what the claim says) and **Rebuttal** (without naming what would defeat the claim, the writer has not engaged the falsifiability gate from the Iron Law).
+`<source-type>` MUST be one of `spec | invariant | test | policy | contract | RFC | ADR`. Writing `Backing: docs say so` or `Backing: it seems likely` does not satisfy the contract — name the source type, then the concrete reference (e.g., `Backing: contract — src/reservations/contract.md:17 requires HTTP 400 for startTime >= endTime`).
+
+The format is not a "shape" or a "style" — it is the contract. Drop or reorder a field and the claim is incomplete. Most missed in practice: **Backing** (the spec/invariant/test/contract that justifies the warrant — without it the warrant is a naked assertion that the data means what the claim says), **Falsifier + Disconfirming probe** (without naming what would defeat the claim, the writer has not engaged the falsifiability gate from the Iron Law).
 
 The warrant remains load-bearing: it explains why the data means the claim, not just that both appear nearby. The backing remains the answer to "why should I believe the warrant" — typically a referenced spec line, contract test, or invariant the codebase already enforces elsewhere.
 
@@ -241,8 +251,8 @@ Findings
 - F-001 ... Evidence: ... Limit: ...
 
 Claims / Hypotheses
-- H-001 ... Prediction: ... Falsifier: ... status: confirmed|rejected|inconclusive|deferred
-- C-001 ... Data/Warrant/Qualifier/Rebuttal: ... status: ...
+- H-001 ... Based on: ... Prediction: ... Falsifier: ... Disconfirming probe: ... Alternative: ... status: confirmed|rejected|inconclusive|deferred
+- C-001 ... Claim/Data/Warrant/Backing (<source-type>)/Qualifier/Rebuttal/Suggested probe/Falsifier/Disconfirming probe: ... status: ...
 
 Defense and probes
 - D/P IDs, what was checked, what would have disproved it, and result
@@ -289,14 +299,21 @@ Findings
 
 Claims / Hypotheses
 - C-001 (review claim): Validation is broken.
-  Data: intermittent 201 response in reservation.spec.ts.
-  Warrant: If invalid payloads bypass validation, the endpoint returns success.
-  Backing: the endpoint contract requires HTTP 400 for `startTime >= endTime` (src/reservations/contract.md and the schema unit test schema.spec.ts:17).
+  Claim: the reservation endpoint accepts invalid `startTime >= endTime` payloads.
+  Data/Evidence: intermittent 201 response in reservation.spec.ts (CI job 4821, 3/10 retries).
+  Warrant: if invalid payloads bypass validation, the endpoint returns success instead of 400.
+  Backing: contract — src/reservations/contract.md and schema.spec.ts:17 require HTTP 400 for `startTime >= endTime`.
   Qualifier: low — F-002 shows direct validation exists; intermittent behavior suggests ordering or shared state.
-  Rebuttal / falsifier: If the failing test sometimes sends a valid payload or hits a mutated fixture, validation is not the cause.
+  Rebuttal / false-positive reason: validation may be intact, and the failing payload may have been mutated to look invalid only after the request was sent.
+  Suggested probe: log the request body in the failing spec and inspect schema dispatch on the path.
+  Falsifier: captured request body on failed runs is structurally valid (startTime < endTime).
+  Disconfirming probe: P-001 — log the outgoing payload in the failing spec; if it is valid, the validation-broken claim is defeated.
 - H-001: Shared fixture mutation changes the payload before the failing assertion.
-  Prediction: failed runs will show payload.endTime later than startTime.
-  Falsifier: captured request body remains invalid on failed runs.
+  Based on: F-001, F-003.
+  Prediction: failed runs will show payload.endTime later than startTime in the captured request body.
+  Falsifier: captured request body remains invalid (startTime >= endTime) on failed runs.
+  Disconfirming probe: P-001 — same log as above; if the payload is invalid on failure, the mutation hypothesis is defeated.
+  Alternative: schema dispatcher races on hot-reload of validation rules.
 
 Defense and probes
 - D-001 for C-001: Existing schema and schema unit test are counter-evidence; claim narrowed to endpoint path or fixture path.
