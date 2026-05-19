@@ -10,7 +10,9 @@ pub struct Manifest {
 }
 
 impl Manifest {
-    pub fn new(skills: Vec<String>) -> Self {
+    pub fn new(mut skills: Vec<String>) -> Self {
+        skills.sort();
+        skills.dedup();
         Self {
             quaere_version: env!("CARGO_PKG_VERSION").to_string(),
             skills,
@@ -23,7 +25,14 @@ impl Manifest {
                 .with_context(|| format!("creating manifest directory {}", parent.display()))?;
         }
         let json = serde_json::to_string_pretty(self)? + "\n";
-        fs::write(path, json).with_context(|| format!("writing manifest to {}", path.display()))?;
+        // Write to a sibling tmp file and rename to make the swap atomic on
+        // POSIX. A mid-write crash leaves the previous manifest intact rather
+        // than producing a half-written JSON the next `quaere list` would
+        // refuse to parse.
+        let tmp = path.with_extension("json.tmp");
+        fs::write(&tmp, json).with_context(|| format!("writing {}", tmp.display()))?;
+        fs::rename(&tmp, path)
+            .with_context(|| format!("renaming {} to {}", tmp.display(), path.display()))?;
         Ok(())
     }
 

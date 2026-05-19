@@ -49,17 +49,49 @@ pub fn run(args: Args) -> Result<()> {
             .read_json::<Release>()
             .context("parsing GitHub release JSON")?,
         Err(ureq::Error::StatusCode(404)) => {
-            println!("no releases yet for {} (HTTP 404)", args.repo);
-            println!("current: quaere {}", current);
+            if args.repo == DEFAULT_REPO {
+                println!("no releases yet for {} (HTTP 404)", args.repo);
+                println!("current: quaere {}", current);
+                println!();
+                println!(
+                    "note: if you are tracking a fork, override the repo with `--repo <owner>/<name>`."
+                );
+            } else {
+                println!("no releases found for {} (HTTP 404)", args.repo);
+                println!("current: quaere {}", current);
+                println!();
+                println!(
+                    "the repo may have no releases yet, may be private, or may not exist under that name."
+                );
+            }
             return Ok(());
         }
+        Err(ureq::Error::StatusCode(403)) | Err(ureq::Error::StatusCode(429)) => {
+            anyhow::bail!(
+                "GitHub API rate-limited the request (HTTP 403/429). \
+                 Unauthenticated callers get 60 requests/hour per IP; retry in a few minutes."
+            );
+        }
+        Err(ureq::Error::StatusCode(code)) if code >= 500 => {
+            anyhow::bail!(
+                "GitHub API returned HTTP {} (server error). Check https://www.githubstatus.com/ and retry.",
+                code
+            );
+        }
+        Err(ureq::Error::StatusCode(code)) => {
+            anyhow::bail!(
+                "GitHub API returned HTTP {} for {}; the repo may be private, renamed, or misspelled.",
+                code,
+                args.repo
+            );
+        }
         Err(e) => {
-            return Err(anyhow::anyhow!("GitHub Releases query failed: {}", e));
+            anyhow::bail!("GitHub Releases query failed: {}", e);
         }
     };
 
     let latest_raw = release.tag_name.trim();
-    let latest = latest_raw.trim_start_matches('v');
+    let latest_str = latest_raw.trim_start_matches('v');
     let label = release.name.as_deref().unwrap_or(latest_raw);
 
     println!("current: quaere {}", current);
@@ -68,19 +100,39 @@ pub fn run(args: Args) -> Result<()> {
         println!("         (marked as prerelease)");
     }
 
-    if latest == current {
-        println!();
-        println!("up to date");
-        return Ok(());
-    }
+    // Parse both versions as semver so that "0.9.0" < "0.10.0" compares
+    // correctly. Falling back to string comparison on parse failure keeps
+    // the command useful for non-semver tags (custom release labels), at
+    // the cost of degrading to the previous lexicographic behavior.
+    let ordering = match (
+        semver::Version::parse(current),
+        semver::Version::parse(latest_str),
+    ) {
+        (Ok(cur), Ok(lat)) => cur.cmp(&lat),
+        _ => current.cmp(latest_str),
+    };
 
     println!();
-    println!("an update is available. To upgrade:");
-    println!(
-        "  curl -fsSL https://raw.githubusercontent.com/{}/main/scripts/install.sh | sh",
-        args.repo
-    );
-    println!("  # or, if you installed via cargo:");
-    println!("  cargo install quaere-cli --force");
+    match ordering {
+        std::cmp::Ordering::Equal => {
+            println!("up to date");
+        }
+        std::cmp::Ordering::Less => {
+            println!("an update is available. To upgrade:");
+            println!(
+                "  curl -fsSL https://raw.githubusercontent.com/{}/main/scripts/install.sh | sh",
+                args.repo
+            );
+            println!("  # or, if you installed via cargo:");
+            println!("  cargo install quaere-cli --force");
+        }
+        std::cmp::Ordering::Greater => {
+            println!(
+                "current version ({}) is ahead of the latest published release ({}).",
+                current, latest_str
+            );
+            println!("(this is normal for development builds.)");
+        }
+    }
     Ok(())
 }

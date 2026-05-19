@@ -29,6 +29,37 @@ pub fn run(args: Args) -> Result<()> {
     fs::create_dir_all(&target)
         .with_context(|| format!("creating install target {}", target.display()))?;
 
+    // Validate --skill names up-front so a typo doesn't silently install
+    // the wrong subset.
+    let available: Vec<String> = SKILLS
+        .dirs()
+        .filter_map(|d| {
+            d.path()
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(str::to_owned)
+        })
+        .filter(|n| n.starts_with("quaere-"))
+        .collect();
+    if !args.skill.is_empty() {
+        let unknown: Vec<&String> = args
+            .skill
+            .iter()
+            .filter(|s| !available.contains(s))
+            .collect();
+        if !unknown.is_empty() {
+            anyhow::bail!(
+                "unknown skill(s): {}. Available: {}",
+                unknown
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                available.join(", ")
+            );
+        }
+    }
+
     let mut installed = Vec::new();
     let mut skipped = Vec::new();
     for entry in SKILLS.dirs() {
@@ -65,19 +96,28 @@ pub fn run(args: Args) -> Result<()> {
 
     if installed.is_empty() && skipped.is_empty() {
         anyhow::bail!(
-            "no Quaere skills matched the request. \
-             Available: {}",
-            SKILLS
-                .dirs()
-                .filter_map(|d| d.path().file_name().and_then(|n| n.to_str()))
-                .filter(|n| n.starts_with("quaere-"))
-                .collect::<Vec<_>>()
-                .join(", ")
+            "no Quaere skills matched the request. Available: {}",
+            available.join(", ")
         );
     }
 
-    let manifest = Manifest::new(installed.clone());
-    manifest.write(&paths::manifest_path(&target))?;
+    // Merge into any existing manifest so that a previous partial install
+    // (e.g. `--skill quaere-semantic`) is not silently dropped by a later
+    // partial install. The merged set is union(prev ∩ disk, installed, skipped).
+    let manifest_file = paths::manifest_path(&target);
+    let mut merged: Vec<String> = Vec::new();
+    if manifest_file.is_file() {
+        let prior = Manifest::read(&manifest_file)?;
+        for name in prior.skills {
+            if target.join(&name).is_dir() {
+                merged.push(name);
+            }
+        }
+    }
+    merged.extend(installed.iter().cloned());
+    merged.extend(skipped.iter().cloned());
+    let manifest = Manifest::new(merged);
+    manifest.write(&manifest_file)?;
 
     for name in &installed {
         println!("installed {}", name);
