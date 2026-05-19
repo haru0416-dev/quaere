@@ -486,6 +486,11 @@
           "texts": ["--version", "help", "checked-in", "local", "No-network", "Fallback"]
         },
         {
+          "name": "canonical No-network fallback strategy line emitted",
+          "type": "regex",
+          "pattern": "(?im)^\\s*(?:[-*#]+\\s*)?No-network fallback strategy\\s*:"
+        },
+        {
           "name": "guarantees against silent model memory",
           "type": "requires_pair",
           "if_contains": "(?i)memory|recall",
@@ -761,9 +766,9 @@
           ]
         },
         {
-          "name": "audit tier declared in exact Tier: form on its own line",
+          "name": "audit tier declared in canonical Tier: form on its own line",
           "type": "regex",
-          "pattern": "(?im)^\\s*(?:[-*]\\s*)?(?:Audit tier|Tier)\\s*:\\s*(?:Triage|Standard|Deep)\\s*$"
+          "pattern": "(?im)^\\s*(?:[-*#]+\\s*)?(?:Audit tier|Tier)\\s*:\\s*(?:Triage|Standard|Deep)\\b"
         },
         {
           "name": "findings classified with explicit labeled lines",
@@ -797,13 +802,13 @@
         {
           "name": "Standard tier requires grounding and evidence-gated review",
           "type": "requires_pair",
-          "if_contains": "(?im)^\\s*(?:[-*]\\s*)?(?:Audit tier|Tier)\\s*:\\s*Standard\\s*$",
+          "if_contains": "(?im)^\\s*(?:[-*#]+\\s*)?(?:Audit tier|Tier)\\s*:\\s*Standard\\b",
           "must_also_contain": "(?ims)(?=.*^\\s*[-*]?\\s*(?:External grounding|quaere-grounding)(?: decision| status)?\\s*:\\s*(?:confirmed|version-mismatched|stale|conflicted|inconclusive|no external facts? required))(?=.*^\\s*[-*]?\\s*(?:Evidence-gated review|quaere-evidence)(?: decision| status)?\\s*:\\s*(?:failed to reject|survived|confirmed|defense|disconfirm|not rejected))"
         },
         {
           "name": "Deep tier requires semantic review plus Standard companions",
           "type": "requires_pair",
-          "if_contains": "(?im)^\\s*(?:[-*]\\s*)?(?:Audit tier|Tier)\\s*:\\s*Deep\\s*$",
+          "if_contains": "(?im)^\\s*(?:[-*#]+\\s*)?(?:Audit tier|Tier)\\s*:\\s*Deep\\b",
           "must_also_contain": "(?ims)(?=.*^\\s*[-*]?\\s*(?:Semantic review|quaere-semantic)(?: decision| status)?\\s*:\\s*(?:mapped|invariants|failure modes|connections))(?=.*^\\s*[-*]?\\s*(?:Evidence-gated review|quaere-evidence)(?: decision| status)?\\s*:\\s*(?:failed to reject|survived|confirmed|defense|disconfirm|not rejected))(?=.*^\\s*[-*]?\\s*(?:External grounding|quaere-grounding)(?: decision| status)?\\s*:\\s*(?:confirmed|version-mismatched|stale|conflicted|inconclusive|no external facts? required))"
         },
         {
