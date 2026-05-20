@@ -4,9 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       runner:
-        description: 'Runner template, e.g. "claude=claude -p < $prompt_file"'
+        description: 'Runner preset'
         required: true
-        type: string
+        default: codex
+        type: choice
+        options:
+          - codex
+          - claude
       skill:
         description: 'Optional skill filter (e.g. quaere-evidence)'
         required: false
@@ -47,12 +51,22 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RUNNER_PRESET: ${{ inputs.runner }}
+          EVAL_MODE: ${{ inputs.mode }}
+          SKILL_FILTER: ${{ inputs.skill }}
+          SCENARIO_FILTER: ${{ inputs.scenario }}
+          REQUIRE_ASSERTIONS: ${{ inputs.require_assertions }}
         run: |
           set -euo pipefail
-          args=(--runner "${{ inputs.runner }}" --mode "${{ inputs.mode }}")
-          if [ -n "${{ inputs.skill }}" ]; then args+=(--skill "${{ inputs.skill }}"); fi
-          if [ -n "${{ inputs.scenario }}" ]; then args+=(--scenario "${{ inputs.scenario }}"); fi
-          if [ "${{ inputs.require_assertions }}" = "true" ]; then args+=(--require-assertions); fi
+          case "$RUNNER_PRESET" in
+            codex) runner="codex=codex exec - < \$prompt_file" ;;
+            claude) runner="claude=claude -p < \$prompt_file" ;;
+            *) echo "unsupported runner preset: $RUNNER_PRESET" >&2; exit 2 ;;
+          esac
+          args=(--runner "$runner" --mode "$EVAL_MODE")
+          if [ -n "$SKILL_FILTER" ]; then args+=(--skill "$SKILL_FILTER"); fi
+          if [ -n "$SCENARIO_FILTER" ]; then args+=(--scenario "$SCENARIO_FILTER"); fi
+          if [ "$REQUIRE_ASSERTIONS" = "true" ]; then args+=(--require-assertions); fi
           python evals/run_skill_evals.py "${args[@]}"
 
       - name: Upload eval-results

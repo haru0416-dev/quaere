@@ -28,8 +28,12 @@ ASSERTION_REQUIRED_KEYS = {
     "requires_pair": ("if_contains", "must_also_contain"),
     "not_in_baseline": ("patterns",),
     # exit_code: value is optional and defaults to 0 in the runner
+    # behavior: at least one threshold is required, but any of five may carry it;
+    #           validator does not enforce which one beyond "type is recognized".
+    # llm_judge: rubric is required; checked at runtime, not here.
+    "llm_judge": ("rubric",),
 }
-SUPPORTED_ASSERTION_TYPES = set(ASSERTION_REQUIRED_KEYS.keys()) | {"exit_code"}
+SUPPORTED_ASSERTION_TYPES = set(ASSERTION_REQUIRED_KEYS.keys()) | {"exit_code", "behavior"}
 
 
 def fail(errors: list[str], message: str) -> None:

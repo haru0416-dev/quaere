@@ -17,6 +17,9 @@ Cargo.lock.bak
 # Eval results (local runs, large, regenerable)
 eval-results/
 
+# LLM-judge response cache (sha-keyed, regenerable, contains LLM output)
+evals/.llm_judge_cache/
+
 # OS / editor
 .DS_Store
 .idea/

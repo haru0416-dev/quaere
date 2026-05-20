@@ -1,0 +1,144 @@
+name: Terminal-Bench eval
+
+# Manual-only — never triggered by push or PR. Running a full Terminal-Bench
+# sweep takes wall-clock time and a non-trivial API budget; an accidental
+# trigger would be costly. The smoke / single-task path exists for cheap
+# wire-up verification before committing to a full sweep.
+
+on:
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: 'Which Quaere agent to evaluate'
+        required: true
+        default: quaere-tb-codex-with-skill
+        type: choice
+        options:
+          - quaere-tb-codex-baseline
+          - quaere-tb-codex-with-skill
+          - both
+      scope:
+        description: 'smoke (handful of tasks), full (terminal-bench-core v0.1.1, 80 tasks), or a single task id'
+        required: true
+        default: smoke
+        type: string
+      task_id:
+        description: 'Optional single task id (overrides scope when set)'
+        required: false
+        type: string
+      codex_version:
+        description: 'Pin for @openai/codex-cli inside the task container'
+        required: false
+        default: '0.128.0'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  terminal-bench:
+    name: tb / ${{ inputs.agent }} / ${{ inputs.task_id || inputs.scope }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 240   # full sweeps are wall-clock heavy; cap at 4h.
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CODEX_VERSION: ${{ inputs.codex_version }}
+      TB_AGENT_REGISTRY: ${{ github.workspace }}/evals/terminal_bench
+      TB_SCOPE: ${{ inputs.scope }}
+      TB_TASK_ID: ${{ inputs.task_id }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Terminal-Bench harness
+        run: |
+          python -m pip install --upgrade pip
+          pip install terminal-bench
+
+      - name: Verify Docker is available (Terminal-Bench requires it)
+        run: docker version
+
+      - name: Validate Codex version input
+        run: |
+          set -euo pipefail
+          [[ "$CODEX_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][A-Za-z0-9_.-]+)?$ ]] || { echo "invalid codex_version: $CODEX_VERSION" >&2; exit 2; }
+
+      - name: Resolve task argument
+        id: tasks
+        run: |
+          set -euo pipefail
+          if [ -n "$TB_TASK_ID" ]; then
+              [[ "$TB_TASK_ID" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "invalid task_id: $TB_TASK_ID" >&2; exit 2; }
+              {
+                echo "kind=single"
+                echo "task_id=$TB_TASK_ID"
+                echo "tag=task-${TB_TASK_ID}"
+              } >> "$GITHUB_OUTPUT"
+          elif [ "$TB_SCOPE" = "full" ]; then
+              # terminal-bench-core v0.1.1: 80-task subset
+              {
+                echo "kind=full"
+                echo "tag=full-v0.1.1"
+              } >> "$GITHUB_OUTPUT"
+          elif [ "$TB_SCOPE" = "smoke" ]; then
+              {
+                echo "kind=smoke"
+                echo "tag=smoke"
+              } >> "$GITHUB_OUTPUT"
+          else
+              echo "unsupported scope: $TB_SCOPE" >&2
+              exit 2
+          fi
+
+      - name: Run terminal-bench (baseline)
+        if: ${{ inputs.agent == 'quaere-tb-codex-baseline' || inputs.agent == 'both' }}
+        env:
+          TASK_KIND: ${{ steps.tasks.outputs.kind }}
+          TASK_ID: ${{ steps.tasks.outputs.task_id }}
+          RESULT_TAG: ${{ steps.tasks.outputs.tag }}
+        run: |
+          set -euo pipefail
+          case "$TASK_KIND" in
+            single) task_args=(--task "$TASK_ID") ;;
+            full) task_args=(--dataset terminal-bench-core --dataset-version 0.1.1) ;;
+            smoke) task_args=(--task hello-world --task crack-7z-hash --task csv-to-parquet --task configure-git-webserver --task download-youtube) ;;
+            *) echo "unsupported task kind: $TASK_KIND" >&2; exit 2 ;;
+          esac
+          mkdir -p "eval-results/tb-${RESULT_TAG}-baseline"
+          tb run \
+            --agent quaere-tb-codex-baseline \
+            "${task_args[@]}" \
+            --output-dir "eval-results/tb-${RESULT_TAG}-baseline"
+
+      - name: Run terminal-bench (with-skill)
+        if: ${{ inputs.agent == 'quaere-tb-codex-with-skill' || inputs.agent == 'both' }}
+        env:
+          TASK_KIND: ${{ steps.tasks.outputs.kind }}
+          TASK_ID: ${{ steps.tasks.outputs.task_id }}
+          RESULT_TAG: ${{ steps.tasks.outputs.tag }}
+        run: |
+          set -euo pipefail
+          case "$TASK_KIND" in
+            single) task_args=(--task "$TASK_ID") ;;
+            full) task_args=(--dataset terminal-bench-core --dataset-version 0.1.1) ;;
+            smoke) task_args=(--task hello-world --task crack-7z-hash --task csv-to-parquet --task configure-git-webserver --task download-youtube) ;;
+            *) echo "unsupported task kind: $TASK_KIND" >&2; exit 2 ;;
+          esac
+          mkdir -p "eval-results/tb-${RESULT_TAG}-with-skill"
+          tb run \
+            --agent quaere-tb-codex-with-skill \
+            "${task_args[@]}" \
+            --output-dir "eval-results/tb-${RESULT_TAG}-with-skill"
+
+      - name: Upload terminal-bench results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tb-results-${{ steps.tasks.outputs.tag }}-${{ inputs.agent }}-${{ github.run_id }}
+          path: eval-results/
+          if-no-files-found: warn
+          retention-days: 30

@@ -120,6 +120,11 @@
             "(?im)^\\s*(?:[-*]\\s*)?Warrant\\s*:",
             "(?im)^\\s*(?:[-*]\\s*)?Rebuttal(?:\\s*/\\s*false[- ]positive[^:]*)?\\s*:"
           ]
+        },
+        {
+          "name": "claim is defeated with named evidence rather than patched (llm-judged)",
+          "type": "llm_judge",
+          "rubric": "The user reports an IDOR concern in their review. A correct response either DEFEATS the claim by naming the specific authorization guard, callsite, or test that contradicts the IDOR risk; or CONFIRMS the claim with concrete evidence; or marks it INCONCLUSIVE. Writing a patch without first defending or rejecting the claim is WRONG.\n\nReply PASS if the output names specific evidence (file:line, guard name, existing test, contract) before reaching a decision. Reply FAIL if the output writes a patch first, or asserts the IDOR risk without naming a specific guard, callsite, or test. End your one-line reason with 'because <one-clause>'."
         }
       ]
     },
@@ -288,6 +293,11 @@
           "type": "requires_pair",
           "if_contains": "(?i)not committed|skipped commit",
           "must_also_contain": "(?i)because|reason"
+        },
+        {
+          "name": "with-skill makes at least one tool call (no hallucinated patches)",
+          "type": "behavior",
+          "min_tool_calls": 1
         }
       ]
     },
@@ -815,6 +825,11 @@
           "name": "audit-loop structure absent in baseline",
           "type": "not_in_baseline",
           "patterns": ["Property Ledger|Security Property", "Attack Surface"]
+        },
+        {
+          "name": "audit completes within 8 minutes of wall-clock (catches runaway loops)",
+          "type": "behavior",
+          "max_duration_seconds": 480
         }
       ]
     }
