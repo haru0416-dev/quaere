@@ -187,8 +187,8 @@ jobs:
             echo "version=${tag#v}"
             echo "arm_mac=$(extract aarch64-apple-darwin)"
             echo "intel_mac=$(extract x86_64-apple-darwin)"
-            echo "arm_linux=$(extract aarch64-unknown-linux-gnu)"
-            echo "intel_linux=$(extract x86_64-unknown-linux-gnu)"
+            echo "arm_linux=$(extract aarch64-unknown-linux-musl)"
+            echo "intel_linux=$(extract x86_64-unknown-linux-musl)"
           } >> "$GITHUB_OUTPUT"
 
       - name: Checkout homebrew-quaere tap
