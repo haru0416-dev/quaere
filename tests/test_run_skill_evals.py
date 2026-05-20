@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "evals" / "run_skill_evals.py"
 
 sys.path.insert(0, str(ROOT))
-from evals.run_skill_evals import load_scenarios  # noqa: E402
+from evals.run_skill_evals import Scenario, evaluate_assertion, grade_output, load_scenarios  # noqa: E402
 
 
 def _make_demo_skill(skills_dir: Path) -> Path:
@@ -205,6 +205,105 @@ class RunSkillEvalsTest(unittest.TestCase):
             copied = list((temp_path / "results").glob("*/noop/demo/demo-case/with-skill/workspace/evidence.txt"))
             self.assertEqual(len(copied), 1)
             self.assertEqual(copied[0].read_text(encoding="utf-8"), "local anchor\n")
+
+    def test_rejects_unsafe_scenario_path_components(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            scenarios = Path(temp) / "scenarios.json"
+            _write_scenarios(
+                scenarios,
+                [
+                    {
+                        "id": "../../escape",
+                        "skill": "demo",
+                        "prompt": "x",
+                        "expected": [],
+                    }
+                ],
+            )
+
+            with self.assertRaisesRegex(ValueError, "may contain only"):
+                load_scenarios(scenarios)
+
+            _write_scenarios(
+                scenarios,
+                [
+                    {
+                        "id": "safe-id",
+                        "skill": "../../escape",
+                        "prompt": "x",
+                        "expected": [],
+                    }
+                ],
+            )
+            with self.assertRaisesRegex(ValueError, "may contain only"):
+                load_scenarios(scenarios)
+
+    def test_runner_template_values_are_shell_quoted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            marker = temp_path / "pwned"
+            output_dir = temp_path / f"results$(touch {marker})"
+            scenarios = temp_path / "scenarios.json"
+            skills_dir = temp_path / "skills"
+            _make_demo_skill(skills_dir)
+            _write_scenarios(
+                scenarios,
+                [
+                    {
+                        "id": "demo-case",
+                        "skill": "demo",
+                        "prompt": "x",
+                        "expected": [],
+                        "assertions": [{"type": "contains", "text": "hello"}],
+                    }
+                ],
+            )
+
+            completed = _run(
+                [
+                    "--scenarios", str(scenarios),
+                    "--skills-dir", str(skills_dir),
+                    "--runner", "fake=printf hello > $output_file",
+                    "--output-dir", str(output_dir),
+                    "--fail-on-grade",
+                ]
+            )
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            self.assertFalse(marker.exists(), "shell metacharacters in substituted paths must not execute")
+
+    def test_custom_llm_judge_cache_dir_does_not_break_summary_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            scenarios = temp_path / "scenarios.json"
+            skills_dir = temp_path / "skills"
+            _make_demo_skill(skills_dir)
+            _write_scenarios(
+                scenarios,
+                [
+                    {
+                        "id": "demo-case",
+                        "skill": "demo",
+                        "prompt": "x",
+                        "expected": [],
+                        "assertions": [{"type": "contains", "text": "hello"}],
+                    }
+                ],
+            )
+
+            completed = _run(
+                [
+                    "--scenarios", str(scenarios),
+                    "--skills-dir", str(skills_dir),
+                    "--runner", "fake=printf hello",
+                    "--output-dir", str(temp_path / "results"),
+                    "--llm-judge-cache-dir", str(temp_path / "cache"),
+                    "--fail-on-grade",
+                ]
+            )
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            summary = _load_summary(temp_path / "results")
+            for run in summary["runs"]:
+                self.assertNotIn("__llm_judge_cache_dir", run["metadata"])
 
 
 class AssertionTypesTest(unittest.TestCase):
@@ -566,6 +665,19 @@ class AssertionTypesTest(unittest.TestCase):
 
 
 class RequireAssertionsFlagTest(unittest.TestCase):
+    def test_skipped_only_assertions_are_skipped(self) -> None:
+        scenario = Scenario(
+            id="skip-only",
+            skill="demo",
+            prompt="x",
+            expected=[],
+            assertions=[{"type": "llm_judge", "name": "judge", "rubric": "Reply PASS or FAIL"}],
+            workspace=None,
+        )
+        grade = grade_output(scenario, "agent output", {"dry_run": False})
+        self.assertEqual(grade["status"], "skipped")
+        self.assertEqual(grade["summary"]["assertions_skipped"], 1)
+
     def test_require_assertions_fails_when_any_run_is_manual_only(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)
@@ -849,6 +961,323 @@ class ScenariosExtraMergeTest(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "length mismatch"):
                 load_scenarios(main, extra)
+
+
+class BehaviorGraderTest(unittest.TestCase):
+    """Cover the behavior grader's threshold logic and manual fallback."""
+
+    def _assertion(self, **kw: Any) -> dict[str, Any]:
+        base: dict[str, Any] = {"type": "behavior", "name": "behavior check"}
+        base.update(kw)
+        return base
+
+    def test_all_thresholds_satisfied_returns_pass(self) -> None:
+        result = evaluate_assertion(
+            self._assertion(
+                max_tool_calls=10,
+                max_duration_seconds=300,
+                max_tokens_output=4000,
+            ),
+            output="(unused)",
+            metadata={"tool_calls": 5, "duration_seconds": 120, "tokens_output": 1500},
+        )
+        self.assertEqual(result["status"], "pass")
+        self.assertIn("all behavior thresholds", result["detail"])
+
+    def test_single_violation_returns_fail_with_specifics(self) -> None:
+        result = evaluate_assertion(
+            self._assertion(max_tool_calls=8),
+            output="(unused)",
+            metadata={"tool_calls": 12},
+        )
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("max_tool_calls=8", result["detail"])
+        self.assertIn("tool_calls=12", result["detail"])
+
+    def test_min_tool_calls_catches_skipped_work(self) -> None:
+        result = evaluate_assertion(
+            self._assertion(min_tool_calls=1),
+            output="(unused)",
+            metadata={"tool_calls": 0},
+        )
+        self.assertEqual(result["status"], "fail")
+
+    def test_missing_metric_returns_manual(self) -> None:
+        result = evaluate_assertion(
+            self._assertion(max_tool_calls=8),
+            output="(unused)",
+            metadata={},  # runner emitted nothing
+        )
+        self.assertEqual(result["status"], "manual")
+        self.assertIn("tool_calls", result["detail"])
+
+    def test_partial_metadata_lists_only_missing_metrics(self) -> None:
+        result = evaluate_assertion(
+            self._assertion(max_tool_calls=8, max_tokens_output=4000),
+            output="(unused)",
+            metadata={"tool_calls": 5},  # tokens_output absent
+        )
+        self.assertEqual(result["status"], "manual")
+        self.assertIn("tokens_output", result["detail"])
+        self.assertNotIn("tool_calls'", result["detail"])  # the present one is not listed as missing
+
+    def test_no_thresholds_configured_is_fail(self) -> None:
+        result = evaluate_assertion(
+            self._assertion(),
+            output="(unused)",
+            metadata={"tool_calls": 5},
+        )
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("at least one threshold", result["detail"])
+
+
+class LlmJudgeGraderTest(unittest.TestCase):
+    """Cover the llm_judge grader: skipped-by-default, pass/fail extraction, cache hits, errors."""
+
+    def _assertion(self, **kw: Any) -> dict[str, Any]:
+        base: dict[str, Any] = {
+            "type": "llm_judge",
+            "name": "judge check",
+            "rubric": "Does the output mention 'hello'? Reply PASS or FAIL with one short reason.",
+        }
+        base.update(kw)
+        return base
+
+    def test_disabled_returns_skipped(self) -> None:
+        result = evaluate_assertion(
+            self._assertion(),
+            output="(any)",
+            metadata={},
+            enable_llm_judge=False,
+        )
+        self.assertEqual(result["status"], "skipped")
+        self.assertIn("llm-judge not enabled", result["detail"])
+
+    def test_pass_keyword_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = evaluate_assertion(
+                self._assertion(),
+                output="hello world",
+                metadata={},
+                enable_llm_judge=True,
+                llm_judge_cache_dir=Path(tmp),
+                llm_judge_call=lambda model, rubric, output: "PASS: the output greets the world",
+            )
+            self.assertEqual(result["status"], "pass")
+            self.assertIn("PASS", result["detail"])
+
+    def test_fail_keyword_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = evaluate_assertion(
+                self._assertion(),
+                output="no greeting",
+                metadata={},
+                enable_llm_judge=True,
+                llm_judge_cache_dir=Path(tmp),
+                llm_judge_call=lambda model, rubric, output: "FAIL: no 'hello' anywhere",
+            )
+            self.assertEqual(result["status"], "fail")
+
+    def test_ambiguous_response_returns_manual(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = evaluate_assertion(
+                self._assertion(),
+                output="x",
+                metadata={},
+                enable_llm_judge=True,
+                llm_judge_cache_dir=Path(tmp),
+                llm_judge_call=lambda model, rubric, output: "I am unsure how to judge this.",
+            )
+            self.assertEqual(result["status"], "manual")
+            self.assertIn("ambiguous", result["detail"])
+
+    def test_cache_hit_avoids_second_call(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            call_count = {"n": 0}
+
+            def counting_call(model: str, rubric: str, output: str) -> str:
+                call_count["n"] += 1
+                return "PASS: counted"
+
+            assertion = self._assertion()
+            first = evaluate_assertion(
+                assertion, "same output", {},
+                enable_llm_judge=True,
+                llm_judge_cache_dir=Path(tmp),
+                llm_judge_call=counting_call,
+            )
+            second = evaluate_assertion(
+                assertion, "same output", {},
+                enable_llm_judge=True,
+                llm_judge_cache_dir=Path(tmp),
+                llm_judge_call=counting_call,
+            )
+            self.assertEqual(first["status"], "pass")
+            self.assertEqual(second["status"], "pass")
+            self.assertEqual(call_count["n"], 1, "second call should hit cache, not invoke LLM")
+            self.assertIn("cache hit", second["detail"])
+
+    def test_judge_call_exception_returns_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            def raising_call(*_args: Any, **_kw: Any) -> str:
+                raise RuntimeError("simulated 429 rate limit")
+            result = evaluate_assertion(
+                self._assertion(),
+                output="x",
+                metadata={},
+                enable_llm_judge=True,
+                llm_judge_cache_dir=Path(tmp),
+                llm_judge_call=raising_call,
+            )
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("429", result["detail"])
+
+    def test_missing_rubric_is_fail(self) -> None:
+        assertion = {"type": "llm_judge", "name": "no-rubric"}  # rubric absent
+        result = evaluate_assertion(
+            assertion, "x", {},
+            enable_llm_judge=True,
+            llm_judge_call=lambda *_a, **_k: "PASS",  # should never run
+        )
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("rubric", result["detail"])
+
+    def test_unknown_backend_is_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = evaluate_assertion(
+                self._assertion(),
+                output="x",
+                metadata={},
+                enable_llm_judge=True,
+                llm_judge_cache_dir=Path(tmp),
+                llm_judge_backend="not-a-real-backend",
+                # No llm_judge_call → the backend dispatch must run
+            )
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("unknown llm_judge_backend", result["detail"])
+
+    def test_codex_backend_dispatch_routes_to_subprocess_caller(self) -> None:
+        # When backend=codex, the dispatch should route to _call_codex_judge.
+        # We monkey-patch that function so the test does NOT actually shell
+        # out to codex (we want unit-level isolation, not an integration
+        # test of the binary).
+        from evals import run_skill_evals as runner_mod
+
+        with tempfile.TemporaryDirectory() as tmp:
+            original = runner_mod._call_codex_judge
+            try:
+                runner_mod._call_codex_judge = lambda model, rubric, output: "PASS: codex-mock"
+                result = evaluate_assertion(
+                    self._assertion(),
+                    output="x",
+                    metadata={},
+                    enable_llm_judge=True,
+                    llm_judge_cache_dir=Path(tmp),
+                    llm_judge_backend="codex",
+                    # NOT passing llm_judge_call — let dispatch pick the codex caller.
+                )
+            finally:
+                runner_mod._call_codex_judge = original
+            self.assertEqual(result["status"], "pass")
+            self.assertIn("codex-mock", result["detail"])
+
+    def test_codex_backend_propagates_subprocess_error(self) -> None:
+        from evals import run_skill_evals as runner_mod
+
+        def boom(model: str, rubric: str, output: str) -> str:
+            raise RuntimeError("codex exec returned 127: command not found")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            original = runner_mod._call_codex_judge
+            try:
+                runner_mod._call_codex_judge = boom
+                result = evaluate_assertion(
+                    self._assertion(),
+                    output="x",
+                    metadata={},
+                    enable_llm_judge=True,
+                    llm_judge_cache_dir=Path(tmp),
+                    llm_judge_backend="codex",
+                )
+            finally:
+                runner_mod._call_codex_judge = original
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("127", result["detail"])
+
+    def test_backend_specific_cache_key_does_not_collide(self) -> None:
+        # Same model name + rubric + output, but different backend. Cache
+        # entries must NOT collide — a Haiku response should not be served
+        # to an openai-compat caller and vice versa.
+        with tempfile.TemporaryDirectory() as tmp:
+            call_log: list[str] = []
+
+            def anthropic_like(model: str, rubric: str, output: str) -> str:
+                call_log.append("anthropic")
+                return "PASS: anthropic"
+
+            def openai_like(model: str, rubric: str, output: str) -> str:
+                call_log.append("openai-compat")
+                return "FAIL: openai-compat"
+
+            r1 = evaluate_assertion(
+                self._assertion(model="shared"),
+                output="same",
+                metadata={},
+                enable_llm_judge=True,
+                llm_judge_cache_dir=Path(tmp),
+                llm_judge_backend="anthropic",
+                llm_judge_call=anthropic_like,
+            )
+            r2 = evaluate_assertion(
+                self._assertion(model="shared"),
+                output="same",
+                metadata={},
+                enable_llm_judge=True,
+                llm_judge_cache_dir=Path(tmp),
+                llm_judge_backend="openai-compat",
+                llm_judge_base_url="http://localhost:8000/v1",
+                llm_judge_call=openai_like,
+            )
+            self.assertEqual(r1["status"], "pass")
+            self.assertEqual(r2["status"], "fail")
+            self.assertEqual(call_log, ["anthropic", "openai-compat"])  # both ran, no collision
+
+    def test_openai_compat_cache_key_includes_base_url(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            call_log: list[str] = []
+
+            def first_server(model: str, rubric: str, output: str) -> str:
+                call_log.append("server-a")
+                return "PASS: server-a"
+
+            def second_server(model: str, rubric: str, output: str) -> str:
+                call_log.append("server-b")
+                return "FAIL: server-b"
+
+            assertion = self._assertion(model="shared")
+            r1 = evaluate_assertion(
+                assertion,
+                output="same",
+                metadata={},
+                enable_llm_judge=True,
+                llm_judge_cache_dir=Path(tmp),
+                llm_judge_backend="openai-compat",
+                llm_judge_base_url="http://localhost:8000/v1",
+                llm_judge_call=first_server,
+            )
+            r2 = evaluate_assertion(
+                assertion,
+                output="same",
+                metadata={},
+                enable_llm_judge=True,
+                llm_judge_cache_dir=Path(tmp),
+                llm_judge_backend="openai-compat",
+                llm_judge_base_url="http://localhost:9000/v1",
+                llm_judge_call=second_server,
+            )
+            self.assertEqual(r1["status"], "pass")
+            self.assertEqual(r2["status"], "fail")
+            self.assertEqual(call_log, ["server-a", "server-b"])
 
 
 if __name__ == "__main__":

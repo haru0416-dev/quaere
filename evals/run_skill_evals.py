@@ -5,8 +5,11 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
+import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -20,6 +23,20 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SCENARIOS = ROOT / "evals" / "scenarios.json"
 DEFAULT_SKILLS_DIR = ROOT / "skills"
 DEFAULT_OUTPUT_DIR = ROOT / "eval-results"
+DEFAULT_LLM_JUDGE_CACHE = ROOT / "evals" / ".llm_judge_cache"
+DEFAULT_LLM_JUDGE_MODEL = "claude-haiku-4-5-20251001"
+SAFE_COMPONENT = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+
+def require_safe_component(value: str, label: str, path: Path | None = None, index: int | None = None) -> None:
+    if SAFE_COMPONENT.fullmatch(value):
+        return
+    location = ""
+    if path is not None and index is not None:
+        location = f"{path}: scenario {index} "
+    raise ValueError(
+        f"{location}{label} {value!r} may contain only letters, digits, dot, dash, and underscore"
+    )
 
 
 @dataclass(frozen=True)
@@ -71,6 +88,8 @@ def _build_scenarios(raw_scenarios: list[dict[str, Any]], path: Path) -> list[Sc
     for index, raw in enumerate(raw_scenarios):
         scenario_id = require_str(raw, "id", path, index)
         skill = require_str(raw, "skill", path, index)
+        require_safe_component(scenario_id, "id", path, index)
+        require_safe_component(skill, "skill", path, index)
         prompt = require_str(raw, "prompt", path, index)
         expected = raw.get("expected", [])
         assertions = raw.get("assertions", [])
@@ -217,7 +236,7 @@ def parse_runner(value: str) -> Runner:
     command = command.strip()
     if not name or not command:
         raise argparse.ArgumentTypeError("runner name and command template must be non-empty")
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+", name):
+    if not SAFE_COMPONENT.fullmatch(name):
         raise argparse.ArgumentTypeError("runner name may contain only letters, digits, dot, dash, and underscore")
     return Runner(name=name, command=command)
 
@@ -310,13 +329,13 @@ def resolve_scenario_workspace(scenario: Scenario, scenarios_path: Path) -> Path
 
 def render_command(command_template: str, job: EvalJob, prompt_file: Path, output_file: Path) -> str:
     values = {
-        "prompt_file": str(prompt_file),
-        "output_file": str(output_file),
-        "workspace": str(job.workspace_dir),
-        "run_dir": str(job.run_dir),
-        "scenario_id": job.scenario.id,
-        "skill": job.scenario.skill,
-        "mode": job.mode,
+        "prompt_file": shlex.quote(str(prompt_file)),
+        "output_file": shlex.quote(str(output_file)),
+        "workspace": shlex.quote(str(job.workspace_dir)),
+        "run_dir": shlex.quote(str(job.run_dir)),
+        "scenario_id": shlex.quote(job.scenario.id),
+        "skill": shlex.quote(job.scenario.skill),
+        "mode": shlex.quote(job.mode),
     }
     try:
         return Template(command_template).safe_substitute(values)
@@ -324,7 +343,16 @@ def render_command(command_template: str, job: EvalJob, prompt_file: Path, outpu
         raise ValueError(f"invalid command template for runner {job.runner.name}: {exc}") from exc
 
 
-def run_job(job: EvalJob, timeout_seconds: int, dry_run: bool) -> dict[str, Any]:
+def run_job(
+    job: EvalJob,
+    timeout_seconds: int,
+    dry_run: bool,
+    *,
+    enable_llm_judge: bool = False,
+    llm_judge_cache_dir: Path | None = None,
+    llm_judge_backend: str = "anthropic",
+    llm_judge_base_url: str | None = None,
+) -> dict[str, Any]:
     prompt_file = job.run_dir / "prompt.md"
     output_file = job.run_dir / "output.txt"
     stderr_file = job.run_dir / "stderr.txt"
@@ -346,6 +374,10 @@ def run_job(job: EvalJob, timeout_seconds: int, dry_run: bool) -> dict[str, Any]
         "prompt_file": str(prompt_file),
         "output_file": str(output_file),
         "dry_run": dry_run,
+        "__enable_llm_judge": enable_llm_judge,
+        "__llm_judge_cache_dir": llm_judge_cache_dir,
+        "__llm_judge_backend": llm_judge_backend,
+        "__llm_judge_base_url": llm_judge_base_url,
     }
 
     if dry_run:
@@ -392,12 +424,24 @@ def run_job(job: EvalJob, timeout_seconds: int, dry_run: bool) -> dict[str, Any]
             }
         )
 
-    metadata_file.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    persisted = public_metadata(metadata)
+    metadata_file.write_text(json.dumps(persisted, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     grade = grade_output(job.scenario, output_file.read_text(encoding="utf-8"), metadata)
     # grade.json is written after finalize_cross_mode_assertions so cross-mode
     # checks (e.g., not_in_baseline) can update assertion results before the
     # file is committed to disk.
     return {"metadata": metadata, "grade": grade, "grade_file": grade_file, "output_file": output_file}
+
+
+def public_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    """Return metadata safe for JSON reports.
+
+    Runtime-only config keys start with `__`; they may contain non-serializable
+    objects such as Path instances and should not be published in per-run
+    metadata or summary output.
+    """
+    public = {k: v for k, v in metadata.items() if not k.startswith("__")}
+    return {k: (str(v) if isinstance(v, Path) else v) for k, v in public.items()}
 
 
 def grade_output(scenario: Scenario, output: str, metadata: dict[str, Any]) -> dict[str, Any]:
@@ -432,9 +476,22 @@ def grade_output(scenario: Scenario, output: str, metadata: dict[str, Any]) -> d
             },
         }
 
-    assertion_results = [evaluate_assertion(assertion, output, metadata) for assertion in scenario.assertions]
-    passed = sum(1 for result in assertion_results if result["status"] == "pass")
-    failed = sum(1 for result in assertion_results if result["status"] == "fail")
+    enable_llm_judge = bool(metadata.get("__enable_llm_judge"))
+    llm_judge_cache_dir = metadata.get("__llm_judge_cache_dir")
+    llm_judge_backend = str(metadata.get("__llm_judge_backend") or "anthropic")
+    llm_judge_base_url = metadata.get("__llm_judge_base_url")
+    assertion_results = [
+        evaluate_assertion(
+            assertion,
+            output,
+            metadata,
+            enable_llm_judge=enable_llm_judge,
+            llm_judge_cache_dir=llm_judge_cache_dir,
+            llm_judge_backend=llm_judge_backend,
+            llm_judge_base_url=llm_judge_base_url,
+        )
+        for assertion in scenario.assertions
+    ]
     manual = [
         {
             "name": item,
@@ -443,21 +500,18 @@ def grade_output(scenario: Scenario, output: str, metadata: dict[str, Any]) -> d
         }
         for item in scenario.expected
     ]
-    status = "manual-only"
-    if assertion_results:
-        status = "pass" if failed == 0 else "fail"
-    return {
+    grade = {
         "scenario_id": scenario.id,
         "skill": scenario.skill,
-        "status": status,
+        "status": "manual-only",
         "assertions": assertion_results,
         "manual_rubric": manual,
         "summary": {
-            "assertions_passed": passed,
-            "assertions_failed": failed,
             "manual_items": len(manual),
         },
     }
+    recompute_grade_status(grade)
+    return grade
 
 
 def decode_timeout_stream(value: str | bytes | None) -> str:
@@ -468,7 +522,175 @@ def decode_timeout_stream(value: str | bytes | None) -> str:
     return value
 
 
-def evaluate_assertion(assertion: dict[str, Any], output: str, metadata: dict[str, Any]) -> dict[str, Any]:
+def _llm_judge_cache_key(model: str, rubric: str, output: str) -> str:
+    """sha256(model identity | rubric | output) — stable key for cache hits across runs."""
+    h = hashlib.sha256()
+    h.update(model.encode("utf-8"))
+    h.update(b"\x00")
+    h.update(rubric.encode("utf-8"))
+    h.update(b"\x00")
+    h.update(output.encode("utf-8"))
+    return h.hexdigest()
+
+
+def _llm_judge_cache_read(cache_dir: Path, key: str) -> dict[str, Any] | None:
+    path = cache_dir / f"{key}.json"
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _llm_judge_cache_write(cache_dir: Path, key: str, payload: dict[str, Any]) -> None:
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    tmp = cache_dir / f"{key}.json.tmp"
+    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.replace(cache_dir / f"{key}.json")
+
+
+JUDGE_PROMPT_TEMPLATE = (
+    "You are grading agent output against a rubric. Read the rubric, "
+    "read the output, and respond with one of the keywords the rubric "
+    "specifies (typically PASS or FAIL) followed by a short reason.\n\n"
+    "--- RUBRIC ---\n{rubric}\n\n"
+    "--- AGENT OUTPUT ---\n{output}\n"
+)
+
+
+def _call_anthropic_judge(model: str, rubric: str, output: str) -> str:
+    """Single LLM call (Anthropic API) returning the judge's text response.
+
+    Lazy-imports the anthropic SDK so users who never enable llm_judge do
+    not pay the import cost or need the dep. Errors propagate up; callers
+    map them to assertion-level fail/manual results.
+    """
+    try:
+        import anthropic  # type: ignore[import-not-found]
+    except ImportError as exc:  # pragma: no cover — environment-dependent
+        raise RuntimeError(
+            "llm_judge anthropic backend requires `pip install anthropic`. "
+            "Install it, switch to --llm-judge-backend openai-compat, or "
+            "omit --enable-llm-judge."
+        ) from exc
+
+    client = anthropic.Anthropic()  # picks up ANTHROPIC_API_KEY from env
+    message = client.messages.create(
+        model=model,
+        max_tokens=512,
+        temperature=0.0,  # determinism over creativity for grading
+        messages=[
+            {
+                "role": "user",
+                "content": JUDGE_PROMPT_TEMPLATE.format(rubric=rubric, output=output),
+            }
+        ],
+    )
+    return "".join(
+        block.text for block in message.content if getattr(block, "type", None) == "text"
+    )
+
+
+def _call_codex_judge(model: str, rubric: str, output: str) -> str:
+    """Single LLM call via the Codex CLI subprocess.
+
+    Invokes `codex exec --output-last-message <tmpfile> -` with the rubric +
+    output piped on stdin, then reads the final message from the temp file.
+    This route adds no Python SDK dependency: it only needs the `codex` CLI
+    on PATH (already required if Codex is the in-tree eval runner). The
+    actual API endpoint Codex hits is controlled by Codex's own env vars
+    (OPENAI_BASE_URL etc.), so this backend automatically picks up the
+    same local-AI setup the agent uses.
+    """
+    import tempfile
+
+    prompt = JUDGE_PROMPT_TEMPLATE.format(rubric=rubric, output=output)
+    fd, out_path = tempfile.mkstemp(prefix="quaere-judge-", suffix=".txt")
+    os.close(fd)
+    try:
+        cmd = ["codex", "exec"]
+        if model:
+            cmd += ["--model", model]
+        cmd += ["--output-last-message", out_path, "-"]
+        completed = subprocess.run(
+            cmd,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            timeout=180,
+            check=False,
+        )
+        if completed.returncode != 0:
+            stderr_tail = (completed.stderr or "").strip().splitlines()[-3:]
+            raise RuntimeError(
+                f"codex exec returned {completed.returncode}: "
+                + " | ".join(stderr_tail)
+            )
+        try:
+            return Path(out_path).read_text(encoding="utf-8")
+        except OSError as exc:
+            raise RuntimeError(f"codex did not write the output file: {exc}") from exc
+    finally:
+        try:
+            os.unlink(out_path)
+        except OSError:
+            pass
+
+
+def _call_openai_compat_judge(base_url: str, model: str, rubric: str, output: str) -> str:
+    """Single LLM call (OpenAI-compatible chat completions) returning the judge's text.
+
+    Targets any server speaking the OpenAI chat completions schema —
+    Ollama (`http://localhost:11434/v1`), vLLM, LM Studio, LocalAI,
+    LiteLLM proxy, etc. The `openai` SDK is lazy-imported so the
+    anthropic-only path does not pull it in.
+
+    API key is taken from OPENAI_API_KEY when present; a placeholder
+    is sent otherwise (most local servers ignore the key).
+    """
+    if not base_url:
+        raise RuntimeError(
+            "openai-compat backend requires --llm-judge-base-url (or "
+            "QUAERE_LLM_JUDGE_BASE_URL) pointing at the OpenAI-compatible "
+            "endpoint (e.g. http://localhost:11434/v1)."
+        )
+    try:
+        from openai import OpenAI  # type: ignore[import-not-found]
+    except ImportError as exc:  # pragma: no cover — environment-dependent
+        raise RuntimeError(
+            "llm_judge openai-compat backend requires `pip install openai`. "
+            "Install it, switch to --llm-judge-backend anthropic, or "
+            "omit --enable-llm-judge."
+        ) from exc
+
+    client = OpenAI(base_url=base_url, api_key=os.environ.get("OPENAI_API_KEY", "dummy"))
+    resp = client.chat.completions.create(
+        model=model,
+        max_tokens=512,
+        temperature=0.0,
+        messages=[
+            {
+                "role": "user",
+                "content": JUDGE_PROMPT_TEMPLATE.format(rubric=rubric, output=output),
+            }
+        ],
+    )
+    choice = resp.choices[0] if resp.choices else None
+    return (choice.message.content if choice and choice.message else "") or ""
+
+
+def evaluate_assertion(
+    assertion: dict[str, Any],
+    output: str,
+    metadata: dict[str, Any],
+    *,
+    enable_llm_judge: bool = False,
+    llm_judge_cache_dir: Path | None = None,
+    llm_judge_backend: str = "anthropic",
+    llm_judge_base_url: str | None = None,
+    llm_judge_call: Any = None,
+) -> dict[str, Any]:
     name = str(assertion.get("name") or assertion.get("type") or "unnamed")
     assertion_type = assertion.get("type")
     if assertion_type == "contains":
@@ -594,6 +816,154 @@ def evaluate_assertion(assertion: dict[str, Any], output: str, metadata: dict[st
             "detail": "awaiting cross-mode evaluation against baseline",
             "patterns": patterns,
         }
+    elif assertion_type == "llm_judge":
+        if not enable_llm_judge:
+            return {
+                "name": name,
+                "type": assertion_type,
+                "status": "skipped",
+                "detail": "llm-judge not enabled for this run (re-run with --enable-llm-judge)",
+            }
+        model = str(assertion.get("model") or DEFAULT_LLM_JUDGE_MODEL)
+        rubric = str(assertion.get("rubric", ""))
+        if not rubric:
+            return {
+                "name": name,
+                "type": assertion_type,
+                "status": "fail",
+                "detail": "llm_judge assertion missing required 'rubric'",
+            }
+        pass_keyword = str(assertion.get("pass_keyword", "PASS"))
+        fail_keyword = str(assertion.get("fail_keyword", "FAIL"))
+        cache_dir = llm_judge_cache_dir or DEFAULT_LLM_JUDGE_CACHE
+        # Cache key includes the backend and endpoint identity so switches
+        # between Anthropic, Codex, or different OpenAI-compatible servers do
+        # not silently reuse cached responses from another judge surface.
+        endpoint = str(llm_judge_base_url or "") if llm_judge_backend == "openai-compat" else ""
+        key = _llm_judge_cache_key(f"{llm_judge_backend}:{endpoint}:{model}", rubric, output)
+        cached = _llm_judge_cache_read(cache_dir, key)
+        if cached is not None:
+            response_text = str(cached.get("response", ""))
+            from_cache = True
+        else:
+            if llm_judge_call is not None:
+                caller = llm_judge_call
+            elif llm_judge_backend == "anthropic":
+                caller = _call_anthropic_judge
+            elif llm_judge_backend == "openai-compat":
+                base_url = llm_judge_base_url
+                caller = lambda m, r, o: _call_openai_compat_judge(base_url, m, r, o)  # noqa: E731
+            elif llm_judge_backend == "codex":
+                caller = _call_codex_judge
+            else:
+                return {
+                    "name": name,
+                    "type": assertion_type,
+                    "status": "fail",
+                    "detail": (
+                        f"unknown llm_judge_backend {llm_judge_backend!r}; "
+                        "expected 'anthropic', 'openai-compat', or 'codex'"
+                    ),
+                }
+            try:
+                response_text = caller(model, rubric, output)
+            except Exception as exc:  # noqa: BLE001 — surface any judge failure to the assertion result
+                return {
+                    "name": name,
+                    "type": assertion_type,
+                    "status": "fail",
+                    "detail": f"llm_judge call failed: {exc}",
+                }
+            _llm_judge_cache_write(
+                cache_dir,
+                key,
+                {
+                    "model": model,
+                    "backend": llm_judge_backend,
+                    "base_url": endpoint or None,
+                    "rubric_sha": hashlib.sha256(rubric.encode("utf-8")).hexdigest(),
+                    "response": response_text,
+                    "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                },
+            )
+            from_cache = False
+        has_pass = pass_keyword in response_text
+        has_fail = fail_keyword in response_text
+        cache_tag = " (cache hit)" if from_cache else ""
+        if has_pass and not has_fail:
+            return {
+                "name": name,
+                "type": assertion_type,
+                "status": "pass",
+                "detail": f"judge: {pass_keyword!r} present{cache_tag}; reason: {response_text.strip()[:200]}",
+            }
+        if has_fail and not has_pass:
+            return {
+                "name": name,
+                "type": assertion_type,
+                "status": "fail",
+                "detail": f"judge: {fail_keyword!r} present{cache_tag}; reason: {response_text.strip()[:200]}",
+            }
+        return {
+            "name": name,
+            "type": assertion_type,
+            "status": "manual",
+            "detail": (
+                f"judge response ambiguous (neither {pass_keyword!r} nor "
+                f"{fail_keyword!r} cleanly present){cache_tag}; "
+                f"response: {response_text.strip()[:200]}"
+            ),
+        }
+    elif assertion_type == "behavior":
+        # Behavior grader: per-run resource thresholds (tool calls, duration,
+        # tokens). Records `status: "manual"` when the underlying runner did
+        # not emit the required metadata so reviewers can audit which runs
+        # are missing instrumentation. Each configured threshold counts as
+        # one check; pass requires every configured threshold to hold.
+        thresholds = {
+            "max_tool_calls": ("tool_calls", lambda v, t: v <= t),
+            "min_tool_calls": ("tool_calls", lambda v, t: v >= t),
+            "max_duration_seconds": ("duration_seconds", lambda v, t: v <= t),
+            "max_tokens_output": ("tokens_output", lambda v, t: v <= t),
+            "max_tokens_input": ("tokens_input", lambda v, t: v <= t),
+        }
+        configured = {k: assertion[k] for k in thresholds if k in assertion}
+        if not configured:
+            return {
+                "name": name,
+                "type": assertion_type,
+                "status": "fail",
+                "detail": "behavior grader requires at least one threshold",
+            }
+        missing_metrics: list[str] = []
+        violations: list[str] = []
+        for option, threshold in configured.items():
+            metric_key, predicate = thresholds[option]
+            observed = metadata.get(metric_key)
+            if observed is None:
+                missing_metrics.append(metric_key)
+                continue
+            if not predicate(observed, threshold):
+                violations.append(
+                    f"{option}={threshold!r} but {metric_key}={observed!r}"
+                )
+        if missing_metrics:
+            return {
+                "name": name,
+                "type": assertion_type,
+                "status": "manual",
+                "detail": (
+                    "runner did not emit "
+                    f"{sorted(set(missing_metrics))}; behavior grader cannot evaluate"
+                ),
+            }
+        ok = not violations
+        detail = (
+            "all behavior thresholds satisfied "
+            f"({list(configured.keys())})"
+            if ok
+            else f"violations: {violations}"
+        )
     else:
         return {
             "name": name,
@@ -622,6 +992,8 @@ def recompute_grade_status(grade: dict[str, Any]) -> None:
     failed = sum(1 for r in assertion_results if r.get("status") == "fail")
     pending = sum(1 for r in assertion_results if r.get("status") == "pending")
     inconclusive = sum(1 for r in assertion_results if r.get("status") == "inconclusive")
+    manual = sum(1 for r in assertion_results if r.get("status") == "manual")
+    skipped = sum(1 for r in assertion_results if r.get("status") == "skipped")
     if not assertion_results:
         grade["status"] = "manual-only"
     elif failed:
@@ -630,6 +1002,10 @@ def recompute_grade_status(grade: dict[str, Any]) -> None:
         grade["status"] = "pending"
     elif inconclusive:
         grade["status"] = "inconclusive"
+    elif skipped > 0 and passed == 0 and (manual + inconclusive + pending) == 0:
+        grade["status"] = "skipped"
+    elif passed == 0:
+        grade["status"] = "manual-only"
     else:
         grade["status"] = "pass"
     summary = grade.setdefault("summary", {})
@@ -637,6 +1013,9 @@ def recompute_grade_status(grade: dict[str, Any]) -> None:
     summary["assertions_failed"] = failed
     summary["assertions_pending"] = pending
     summary["assertions_inconclusive"] = inconclusive
+    summary["assertions_manual"] = manual
+    summary["assertions_skipped"] = skipped
+    summary["assertions_skipped"] = skipped
 
 
 def finalize_cross_mode_assertions(results: list[dict[str, Any]]) -> None:
@@ -721,7 +1100,7 @@ def write_summary(output_root: Path, results: list[dict[str, Any]]) -> Path:
         "manual_only_runs": sum(1 for item in results if item["grade"].get("status") == "manual-only"),
         "runs_with_assertions": sum(1 for item in results if item["grade"].get("assertions")),
     }
-    public_runs = [{"metadata": item["metadata"], "grade": item["grade"]} for item in results]
+    public_runs = [{"metadata": public_metadata(item["metadata"]), "grade": item["grade"]} for item in results]
     summary = {
         "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "output_root": str(output_root),
@@ -765,6 +1144,50 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true", help="Write prompts and metadata without invoking runners.")
     parser.add_argument("--fail-on-grade", action="store_true", help="Exit non-zero on command or assertion failure.")
     parser.add_argument(
+        "--enable-llm-judge",
+        action="store_true",
+        help=(
+            "Run `llm_judge` assertions against an LLM (default: skipped). "
+            "Requires the `anthropic` package and ANTHROPIC_API_KEY in the "
+            "environment. Responses are cached under evals/.llm_judge_cache/ "
+            "keyed by sha256(model+rubric+output)."
+        ),
+    )
+    parser.add_argument(
+        "--llm-judge-cache-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Override the cache directory for llm_judge responses "
+            "(default: evals/.llm_judge_cache/)."
+        ),
+    )
+    parser.add_argument(
+        "--llm-judge-backend",
+        choices=("anthropic", "openai-compat", "codex"),
+        default="anthropic",
+        help=(
+            "Backend the llm_judge grader calls. `anthropic` uses the "
+            "official Anthropic SDK with ANTHROPIC_API_KEY (default). "
+            "`openai-compat` uses the openai SDK with --llm-judge-base-url "
+            "pointing at any OpenAI-compatible endpoint — Ollama "
+            "(http://localhost:11434/v1), vLLM, LM Studio, LocalAI, "
+            "LiteLLM proxy, etc. `codex` shells out to `codex exec "
+            "--output-last-message`, reusing whatever endpoint and auth "
+            "Codex CLI is already configured for (no extra Python SDK)."
+        ),
+    )
+    parser.add_argument(
+        "--llm-judge-base-url",
+        default=os.environ.get("QUAERE_LLM_JUDGE_BASE_URL"),
+        help=(
+            "Base URL for the openai-compat backend "
+            "(e.g. http://localhost:11434/v1). Ignored when "
+            "--llm-judge-backend=anthropic. Defaults to "
+            "$QUAERE_LLM_JUDGE_BASE_URL."
+        ),
+    )
+    parser.add_argument(
         "--require-assertions",
         action="store_true",
         help="Exit non-zero if any run was graded manual-only (no deterministic assertions evaluated).",
@@ -803,7 +1226,15 @@ def main(argv: list[str]) -> int:
                     skills_dir=args.skills_dir,
                     workspace_source=workspace_source,
                 )
-                result = run_job(job, timeout_seconds=args.timeout, dry_run=args.dry_run)
+                result = run_job(
+                job,
+                timeout_seconds=args.timeout,
+                dry_run=args.dry_run,
+                enable_llm_judge=args.enable_llm_judge,
+                llm_judge_cache_dir=args.llm_judge_cache_dir,
+                llm_judge_backend=args.llm_judge_backend,
+                llm_judge_base_url=args.llm_judge_base_url,
+            )
                 results.append(result)
 
     finalize_cross_mode_assertions(results)

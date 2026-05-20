@@ -68,9 +68,12 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Bundle archive
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME:-${{ inputs.tag }}}"
+          tag="$RELEASE_TAG"
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][A-Za-z0-9_.-]+)?$ ]] || { echo "invalid release tag: $tag" >&2; exit 2; }
           archive="quaere-${tag}-${{ matrix.target }}"
           mkdir -p "dist/${archive}"
           cp "cli/target/${{ matrix.target }}/release/quaere" "dist/${archive}/quaere"
@@ -91,9 +94,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Bundle skills
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME:-${{ inputs.tag }}}"
+          tag="$RELEASE_TAG"
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][A-Za-z0-9_.-]+)?$ ]] || { echo "invalid release tag: $tag" >&2; exit 2; }
           archive="quaere-skills-${tag}.tar.gz"
           tar -czf "$archive" skills LICENSE README.md
           mkdir -p dist
@@ -123,16 +129,18 @@ jobs:
           mkdir -p release
           find artifacts -name '*.tar.gz' -exec mv {} release/ \;
           cd release
-          sha256sum *.tar.gz > SHA256SUMS
+          sha256sum -- *.tar.gz > SHA256SUMS
           ls -la
           cat SHA256SUMS
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME:-${{ inputs.tag }}}"
+          tag="$RELEASE_TAG"
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][A-Za-z0-9_.-]+)?$ ]] || { echo "invalid release tag: $tag" >&2; exit 2; }
           gh release create "$tag" \
             release/*.tar.gz release/SHA256SUMS \
             --title "$tag" \

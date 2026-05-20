@@ -214,8 +214,56 @@ Scenarios carry deterministic `assertions` for CI-friendly checks, in addition t
 | `requires_pair` | if `if_contains` matches, then `must_also_contain` (or, optionally, `skip_when`) must also match |
 | `not_in_baseline` | a pattern that *only* the with-skill mode should match (signal isolation) |
 | `exit_code` | the runner exit code must equal the given integer |
+| `behavior` | per-run resource thresholds against runtime metadata (`max_tool_calls` / `min_tool_calls` / `max_duration_seconds` / `max_tokens_output` / `max_tokens_input`); records `status: "manual"` when the runner did not emit the relevant metric |
+| `llm_judge` | LLM grades the output against a free-form `rubric`; opt-in via `--enable-llm-judge`. Returns `pass` / `fail` / `manual` based on the judge's response and is skipped (`status: "skipped"`) when the flag is off |
 
 The `skip_when` clause on `requires_pair` lets an assertion treat a labeled skip branch (e.g. `Final gate: skipped because <reason>`) as vacuously satisfied. Anchor `skip_when` tightly — the bare token `(?i)skipped` would silently flip fails to passes whenever the word appears anywhere in output.
+
+`llm_judge` is default-off so per-PR CI cost stays at zero. To run judge-graded assertions:
+
+```bash
+export ANTHROPIC_API_KEY=...
+pip install anthropic
+python evals/run_skill_evals.py \
+  --runner 'codex=codex exec - < $prompt_file' \
+  --enable-llm-judge \
+  --mode both \
+  --output-dir "$(pwd)/eval-results/$(date -u +%Y%m%dT%H%M%SZ)"
+```
+
+Responses are cached at `evals/.llm_judge_cache/<sha>.json` keyed by `sha256(backend:model + rubric + output)`, so re-running with unchanged outputs is free. Default model is `claude-haiku-4-5-20251001`; per-call cost is approximately ¥0.4 (input $1 / MTok + output $5 / MTok, 2,200 input / 100 output tokens per judgement). A full 14-scenario sweep with ~3 judge assertions per scenario lands around ¥34.
+
+#### Running llm_judge against a local model
+
+Any OpenAI-compatible endpoint works — Ollama, vLLM, LM Studio, LocalAI, LiteLLM proxy, etc. Two extra flags:
+
+```bash
+pip install openai
+python evals/run_skill_evals.py \
+  --runner 'codex=codex exec - < $prompt_file' \
+  --enable-llm-judge \
+  --llm-judge-backend openai-compat \
+  --llm-judge-base-url http://localhost:11434/v1 \
+  --mode both \
+  --output-dir "$(pwd)/eval-results/$(date -u +%Y%m%dT%H%M%SZ)"
+```
+
+`--llm-judge-base-url` can also come from `$QUAERE_LLM_JUDGE_BASE_URL`. The `OPENAI_API_KEY` env var is used if set, otherwise a placeholder is sent (most local servers ignore it). The cache key includes the backend, so a switch between backends does not silently reuse responses from the other one. Smaller local models (7–13B) tend to be noisy on PASS / FAIL boundary cases; 30B+ class is recommended for stable grading.
+
+#### Running llm_judge via Codex CLI
+
+A third backend reuses the Codex CLI subprocess for grading. No extra Python SDK; the judge picks up whatever endpoint and auth Codex is already configured for (so the judge sees the same model / OPENAI_BASE_URL / OS auth that the agent under test does):
+
+```bash
+python evals/run_skill_evals.py \
+  --runner 'codex=codex exec - < $prompt_file' \
+  --enable-llm-judge \
+  --llm-judge-backend codex \
+  --mode both \
+  --output-dir "$(pwd)/eval-results/$(date -u +%Y%m%dT%H%M%SZ)"
+```
+
+The codex backend invokes `codex exec --output-last-message <tmpfile> -`, reads the final message, and discards the rest. Per-call cost matches whatever Codex itself bills (Codex's own model selection applies; pass `--llm-judge-model <id>` to pin a specific one). Useful when Codex is already authenticated for the in-tree eval runner and you don't want to manage a second SDK or key.
 
 ### Locale alternates
 
@@ -237,7 +285,7 @@ Real-LLM eval runs are gated behind a manual workflow trigger and are not requir
 
 The in-tree eval is fast and well-suited to per-PR signal, but it does not substitute for third-party validation. Four external benchmarks are tracked for future integration, in this priority order:
 
-1. **[Terminal-Bench v2](https://www.tbench.ai/)** — 89 terminal-environment tasks (SWE, security, data, sysadmin). The closest fit for `quaere-execution` and `quaere-grounding`. Highest expected Δ. Targeted for v0.3.
+1. **[Terminal-Bench v2](https://www.tbench.ai/)** — 80-task `terminal-bench-core` v0.1.1 (the current public leaderboard subset, out of 241 in the broader pool). The closest fit for `quaere-execution` and `quaere-grounding`. Highest expected Δ. **In progress for v0.3**: adapter shipped at [`evals/terminal_bench/`](evals/terminal_bench/) with two Codex-CLI-wrapping agents (`quaere-tb-codex-baseline` / `quaere-tb-codex-with-skill`) and a manual-trigger CI workflow. Smoke / full / leaderboard phases per the adapter README.
 2. **[SWE-bench Verified](https://www.swebench.com/)** — 500 human-verified GitHub-issue patches. The standard credibility test for coding agents; non-optional eventually. Heavy infra cost (≥120GB storage, 16GB RAM, 8 CPU) and substantial API budget. Targeted for v1.0.
 3. **[SkillsBench](https://www.skillsbench.ai/)** — 84 domain-skill tasks (3D, robotics, security PCAP, energy, etc.). Submission unit is "agent that uses skills". Lower expected Δ because domain skills dominate; Quaere's process-correction angle is less visible. Tracked, not committed.
 4. **SWE-Bench Pro** — harder successor to Verified. Considered only after Verified.

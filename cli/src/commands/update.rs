@@ -120,8 +120,8 @@ pub fn run(args: Args) -> Result<()> {
         std::cmp::Ordering::Less => {
             println!("an update is available. To upgrade:");
             println!(
-                "  curl -fsSL https://raw.githubusercontent.com/{}/main/scripts/install.sh | sh",
-                args.repo
+                "  QUAERE_REPO={} QUAERE_VERSION={} curl -fsSL https://quaere.dev/install.sh | sh",
+                args.repo, latest_raw
             );
             println!("  # or, if you installed via cargo:");
             println!("  cargo install quaere-cli --force");

@@ -218,8 +218,56 @@ python evals/run_skill_evals.py \
 | `requires_pair` | `if_contains` が出たら、続けて `must_also_contain` (または `skip_when`) も出ているか |
 | `not_in_baseline` | with-skill だけが該当パターンを持つ、というシグナル分離 |
 | `exit_code` | ランナーの exit code が指定値か |
+| `behavior` | runtime メタデータに対するリソース閾値 (`max_tool_calls` / `min_tool_calls` / `max_duration_seconds` / `max_tokens_output` / `max_tokens_input`)。該当メトリクスがランナーから出ていない場合は `status: "manual"` |
+| `llm_judge` | 自由記述の `rubric` に対して LLM が判定。`--enable-llm-judge` でオプトイン。フラグ OFF のときは `status: "skipped"` |
 
 `requires_pair` の `skip_when` 句は、ラベル付きスキップ枝 (例: `Final gate: skipped because <reason>`) を「無効化された等価」として扱う。アンカーは厳しく書くこと。素の `(?i)skipped` だと、文中のどこかにその語が出ただけで fail が pass に化ける。
+
+`llm_judge` は per-PR CI コストをゼロに保つため既定オフ。judge-graded アサーションを走らせるとき:
+
+```bash
+export ANTHROPIC_API_KEY=...
+pip install anthropic
+python evals/run_skill_evals.py \
+  --runner 'codex=codex exec - < $prompt_file' \
+  --enable-llm-judge \
+  --mode both \
+  --output-dir "$(pwd)/eval-results/$(date -u +%Y%m%dT%H%M%SZ)"
+```
+
+レスポンスは `evals/.llm_judge_cache/<sha>.json` に `sha256(backend:model + rubric + output)` キーで保存され、出力が同じなら再実行はゼロコスト。既定モデルは `claude-haiku-4-5-20251001`。1 回あたり約 ¥0.4 (input $1 / MTok + output $5 / MTok、judge 1 回で 2,200 input / 100 output tokens 程度)。14 シナリオ × 約 3 judge アサーション × 2 モード のフルスウィープでおおよそ ¥34。
+
+#### ローカルモデルで llm_judge を回す
+
+OpenAI 互換エンドポイントなら何でも繋がる — Ollama、vLLM、LM Studio、LocalAI、LiteLLM プロキシなど。フラグ 2 つ追加:
+
+```bash
+pip install openai
+python evals/run_skill_evals.py \
+  --runner 'codex=codex exec - < $prompt_file' \
+  --enable-llm-judge \
+  --llm-judge-backend openai-compat \
+  --llm-judge-base-url http://localhost:11434/v1 \
+  --mode both \
+  --output-dir "$(pwd)/eval-results/$(date -u +%Y%m%dT%H%M%SZ)"
+```
+
+`--llm-judge-base-url` は環境変数 `$QUAERE_LLM_JUDGE_BASE_URL` でも指定可。`OPENAI_API_KEY` があれば使い、なければプレースホルダを送る (ローカルサーバの大半はキーを見ない)。キャッシュキーに backend を含めているので、backend を切り替えても誤って互いのキャッシュを返さない。小さなローカルモデル (7〜13B) は PASS / FAIL 境界の判定が不安定になりやすいので、安定した判定には 30B+ クラスを推奨。
+
+#### Codex CLI を使って llm_judge を回す
+
+3 つ目の backend は Codex CLI のサブプロセスを judge にも流用する。Python SDK を追加で入れる必要がなく、Codex がすでに設定済みのエンドポイント・認証 (OPENAI_BASE_URL も含む) をそのまま judge も使う:
+
+```bash
+python evals/run_skill_evals.py \
+  --runner 'codex=codex exec - < $prompt_file' \
+  --enable-llm-judge \
+  --llm-judge-backend codex \
+  --mode both \
+  --output-dir "$(pwd)/eval-results/$(date -u +%Y%m%dT%H%M%SZ)"
+```
+
+`codex exec --output-last-message <tmpfile> -` を呼んで最終メッセージだけ取り出し、残りは捨てる。モデルは Codex 自身の設定に従う (固定したければ `--llm-judge-model <id>` で上書き)。Codex CLI が既に in-tree eval runner として認証されている場合、SDK や鍵を追加管理せずに済む。
 
 ### ロケール選言
 
@@ -241,7 +289,7 @@ extras は (シナリオ id、アサーション名) で名前マッチしてか
 
 in-tree の eval は PR ごとに通すには軽くて十分だが、第三者検証の代わりにはならない。優先順位つきで以下の 4 つを次フェーズ以降の組み込み候補としている。
 
-1. **[Terminal-Bench v2](https://www.tbench.ai/)** — SWE / セキュリティ / データ / sysadmin にまたがる 89 個の端末タスク。`quaere-execution` と `quaere-grounding` の領域そのもので、最も Δ が出やすい想定。v0.3 ターゲット。
+1. **[Terminal-Bench v2](https://www.tbench.ai/)** — 公開 leaderboard の対象は `terminal-bench-core` v0.1.1 の 80 タスク (より広いプールには 241 タスクある)。SWE / セキュリティ / データ / sysadmin。`quaere-execution` と `quaere-grounding` の領域そのもので、最も Δ が出やすい想定。**v0.3 で着手中**: アダプタは [`evals/terminal_bench/`](evals/terminal_bench/) に同梱、Codex CLI を wrap した 2 つのエージェント (`quaere-tb-codex-baseline` / `quaere-tb-codex-with-skill`) と manual-trigger CI workflow。smoke / full / leaderboard の 3 フェーズはアダプタ README 参照。
 2. **[SWE-bench Verified](https://www.swebench.com/)** — 人手で正解確認された 500 個の GitHub issue パッチ。コーディングエージェント界隈の信頼度の基準。いずれは避けて通れない。eval host に 120GB ストレージ・16GB RAM・8 CPU と API 予算が要る。v1.0 ターゲット。
 3. **[SkillsBench](https://www.skillsbench.ai/)** — 3D / ロボティクス / セキュリティ PCAP / エネルギーなど 84 個の domain skill タスク。提出単位は「スキルを使うエージェント」。domain 純度が高い分、Quaere の process 補正は Δ が小さく出る可能性が高い。追跡だけ。
 4. **SWE-Bench Pro** — Verified の難化版。Verified を通してから検討。
