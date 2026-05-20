@@ -150,3 +150,81 @@ jobs:
             --title "$tag" \
             --generate-notes \
             --repo "$GITHUB_REPOSITORY"
+
+  bump-homebrew:
+    name: bump homebrew tap
+    needs: release
+    runs-on: ubuntu-latest
+    # Skipped automatically if the cross-repo token is not configured;
+    # see scripts/install.sh and README for the one-off PAT setup.
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - name: Fetch SHA256SUMS from the just-published release
+        id: shas
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag="$RELEASE_TAG"
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][A-Za-z0-9_.-]+)?$ ]] || { echo "invalid release tag: $tag" >&2; exit 2; }
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" -p SHA256SUMS -O /tmp/SHA256SUMS
+          extract() { awk -v t="$1" '$2 ~ t {print $1}' /tmp/SHA256SUMS; }
+          {
+            echo "tag=$tag"
+            echo "version=${tag#v}"
+            echo "arm_mac=$(extract aarch64-apple-darwin)"
+            echo "intel_mac=$(extract x86_64-apple-darwin)"
+            echo "arm_linux=$(extract aarch64-unknown-linux-gnu)"
+            echo "intel_linux=$(extract x86_64-unknown-linux-gnu)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout homebrew-quaere tap
+        uses: actions/checkout@v6
+        with:
+          repository: haru0416-dev/homebrew-quaere
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Rewrite Formula/quaere.rb
+        working-directory: tap
+        env:
+          V: ${{ steps.shas.outputs.version }}
+          ARM_MAC: ${{ steps.shas.outputs.arm_mac }}
+          INTEL_MAC: ${{ steps.shas.outputs.intel_mac }}
+          ARM_LINUX: ${{ steps.shas.outputs.arm_linux }}
+          INTEL_LINUX: ${{ steps.shas.outputs.intel_linux }}
+        run: |
+          python3 - <<'PY'
+          import os, re, pathlib, sys
+          p = pathlib.Path("Formula/quaere.rb")
+          text = p.read_text()
+          text, n_ver = re.subn(r'version "[^"]+"', f'version "{os.environ["V"]}"', text, count=1)
+          if n_ver != 1:
+              sys.exit("could not locate `version` line in Formula/quaere.rb")
+          shas = [os.environ[k] for k in ("ARM_MAC", "INTEL_MAC", "ARM_LINUX", "INTEL_LINUX")]
+          if not all(shas):
+              sys.exit(f"missing one or more SHA values: {shas}")
+          _it = iter(shas)
+          text, n_sha = re.subn(r'sha256 "[0-9a-f]+"', lambda _m: f'sha256 "{next(_it)}"', text, count=4)
+          if n_sha != 4:
+              sys.exit(f"expected 4 sha256 lines, rewrote {n_sha}")
+          p.write_text(text)
+          PY
+          git --no-pager diff Formula/quaere.rb
+
+      - name: Commit and push
+        working-directory: tap
+        env:
+          TAG: ${{ steps.shas.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet Formula/quaere.rb; then
+            echo "no formula change for $TAG (already at this version?); skipping push"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/quaere.rb
+          git commit -m "feat: bump Quaere formula to $TAG"
+          git push origin HEAD:main
