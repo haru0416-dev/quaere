@@ -24,20 +24,27 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
+          # Linux x86_64 builds as fully static against musl libc. The
+          # previous ubuntu-latest + GLIBC artifact required GLIBC 2.39
+          # (Ubuntu 24.04 builder) and broke on Debian Bookworm / Ubuntu
+          # 22.04 / RHEL 8 — Terminal-Bench task containers surfaced this
+          # at v0.3.0. musl static avoids the GLIBC dependency entirely.
+          - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
-            cross: false
-          - target: aarch64-unknown-linux-gnu
+            runner: cargo
+            apt: musl-tools
+          # Linux aarch64 uses the `cross` tool because the C bits inside
+          # ring need a musl-aware aarch64 toolchain that is not in apt.
+          # `cross` ships a Docker image with the right toolchain pre-set.
+          - target: aarch64-unknown-linux-musl
             os: ubuntu-latest
-            cross: true
-            linker: aarch64-linux-gnu-gcc
-            apt: gcc-aarch64-linux-gnu
+            runner: cross
           - target: x86_64-apple-darwin
             os: macos-latest
-            cross: false
+            runner: cargo
           - target: aarch64-apple-darwin
             os: macos-latest
-            cross: false
+            runner: cargo
     steps:
       - uses: actions/checkout@v6
         with:
@@ -53,21 +60,26 @@ jobs:
           workspaces: cli
           key: release-${{ matrix.target }}
 
-      - name: Install cross linker (linux aarch64 only)
-        if: matrix.cross == true
+      - name: Install apt prerequisites
+        if: matrix.apt
         run: |
           sudo apt-get update
-          sudo apt-get install -y ${{ matrix.apt }}
+          sudo apt-get install -y --no-install-recommends ${{ matrix.apt }}
 
-      - name: Set cross-linker env (linux aarch64 only)
-        if: matrix.linker != ''
-        run: |
-          target_env=$(echo '${{ matrix.target }}' | tr 'a-z-' 'A-Z_')
-          echo "CARGO_TARGET_${target_env}_LINKER=${{ matrix.linker }}" >> "$GITHUB_ENV"
+      - name: Install cross
+        if: matrix.runner == 'cross'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
 
-      - name: Build release binary
+      - name: Build release binary (cargo)
+        if: matrix.runner == 'cargo'
         working-directory: cli
         run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build release binary (cross, mounted from repo root)
+        if: matrix.runner == 'cross'
+        run: cross build --manifest-path cli/Cargo.toml --release --target ${{ matrix.target }}
 
       - name: Bundle archive
         env:
