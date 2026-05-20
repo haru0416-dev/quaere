@@ -112,14 +112,14 @@ log "installed $QUAERE_INSTALL_DIR/quaere"
 
 # Populate ~/.claude/skills/ unless opted out.
 if [ "$QUAERE_SKILLS" = "1" ]; then
-    log "installing skills (Claude Code → ~/.claude/skills/)"
-    "$QUAERE_INSTALL_DIR/quaere" install --force \
-        || warn "skill install step exited non-zero; run \`quaere install\` manually"
-    printf '\n  Codex users: also run  quaere install --target ~/.agents/skills\n\n' >&2
+    log "installing skills"
+    "$QUAERE_INSTALL_DIR/quaere" install all --force \
+        || warn "skill install step exited non-zero; run \`quaere install all\` manually"
 else
-    log "binary installed. Run \`quaere install\` to deploy skills:"
-    log "  Claude Code:  quaere install"
-    log "  Codex:        quaere install --target ~/.agents/skills"
+    log "binary installed. Run one of:"
+    log "  quaere install          # Claude Code only"
+    log "  quaere install codex    # Codex only"
+    log "  quaere install all      # both"
 fi
 
 # PATH hint.

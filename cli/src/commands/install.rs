@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use clap::Args as ClapArgs;
+use clap::{Args as ClapArgs, ValueEnum};
 use include_dir::{include_dir, Dir};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -9,11 +9,41 @@ use crate::paths;
 
 static SKILLS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/skills");
 
+#[derive(ValueEnum, Clone, Debug, PartialEq)]
+pub enum Agent {
+    /// Claude Code — ~/.claude/skills/
+    Claude,
+    /// Codex CLI  — ~/.agents/skills/
+    Codex,
+    /// Both Claude Code and Codex
+    All,
+}
+
+impl Agent {
+    fn targets(&self) -> Result<Vec<(String, PathBuf)>> {
+        let home = dirs::home_dir().context("could not resolve $HOME")?;
+        Ok(match self {
+            Agent::Claude => vec![(
+                "Claude Code".to_owned(),
+                home.join(".claude").join("skills"),
+            )],
+            Agent::Codex => vec![("Codex".to_owned(), home.join(".agents").join("skills"))],
+            Agent::All => vec![
+                (
+                    "Claude Code".to_owned(),
+                    home.join(".claude").join("skills"),
+                ),
+                ("Codex".to_owned(), home.join(".agents").join("skills")),
+            ],
+        })
+    }
+}
+
 #[derive(ClapArgs)]
 pub struct Args {
-    /// Install target. Defaults to ~/.claude/skills/.
-    #[arg(long, short = 't')]
-    target: Option<PathBuf>,
+    /// Agent to install for. Defaults to `claude`.
+    #[arg(value_enum, default_value = "claude")]
+    pub agent: Agent,
 
     /// Overwrite existing skill directories at the target.
     #[arg(long)]
@@ -22,15 +52,21 @@ pub struct Args {
     /// Only install the named skill. Repeatable.
     #[arg(long)]
     skill: Vec<String>,
+
+    /// Override the install path directly (advanced). Implies --agent=claude target name.
+    #[arg(long, short = 't', hide = true)]
+    target: Option<PathBuf>,
 }
 
 pub fn run(args: Args) -> Result<()> {
-    let target = paths::resolve_target(args.target)?;
-    fs::create_dir_all(&target)
-        .with_context(|| format!("creating install target {}", target.display()))?;
+    // --target is a hidden escape hatch; it bypasses agent selection.
+    let targets: Vec<(String, PathBuf)> = if let Some(p) = args.target {
+        vec![("custom".to_owned(), p)]
+    } else {
+        args.agent.targets()?
+    };
 
-    // Validate --skill names up-front so a typo doesn't silently install
-    // the wrong subset.
+    // Validate --skill names up-front against the embedded bundle.
     let available: Vec<String> = SKILLS
         .dirs()
         .filter_map(|d| {
@@ -41,6 +77,7 @@ pub fn run(args: Args) -> Result<()> {
         })
         .filter(|n| n.starts_with("quaere-"))
         .collect();
+
     if !args.skill.is_empty() {
         let unknown: Vec<&String> = args
             .skill
@@ -60,83 +97,111 @@ pub fn run(args: Args) -> Result<()> {
         }
     }
 
-    let mut installed = Vec::new();
-    let mut skipped = Vec::new();
-    for entry in SKILLS.dirs() {
-        let name = entry
-            .path()
-            .file_name()
-            .and_then(|n| n.to_str())
-            .map(str::to_owned)
-            .unwrap_or_default();
-        if !name.starts_with("quaere-") {
-            continue;
+    // Deduplicate targets that resolve to the same real path (e.g. symlinks).
+    let mut seen_real: Vec<PathBuf> = Vec::new();
+    let mut deduped: Vec<(String, PathBuf)> = Vec::new();
+    for (label, path) in &targets {
+        let real = fs::canonicalize(path).unwrap_or_else(|_| path.clone());
+        if !seen_real.contains(&real) {
+            seen_real.push(real);
+            deduped.push((label.clone(), path.clone()));
         }
-        if !args.skill.is_empty() && !args.skill.iter().any(|s| s == &name) {
-            continue;
+    }
+
+    let multi = deduped.len() > 1;
+    let mut all_skill_names: Vec<String> = Vec::new();
+
+    for (label, target) in &deduped {
+        if multi {
+            println!("--- {} ({})", label, target.display());
         }
 
-        let dest = target.join(&name);
-        if dest.exists() {
-            if !args.force {
-                skipped.push(name);
+        fs::create_dir_all(target)
+            .with_context(|| format!("creating install target {}", target.display()))?;
+
+        let mut installed = Vec::new();
+        let mut skipped = Vec::new();
+
+        for entry in SKILLS.dirs() {
+            let name = entry
+                .path()
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(str::to_owned)
+                .unwrap_or_default();
+            if !name.starts_with("quaere-") {
                 continue;
             }
-            fs::remove_dir_all(&dest)
-                .with_context(|| format!("removing existing {}", dest.display()))?;
+            if !args.skill.is_empty() && !args.skill.iter().any(|s| s == &name) {
+                continue;
+            }
+
+            let dest = target.join(&name);
+            if dest.exists() {
+                if !args.force {
+                    skipped.push(name);
+                    continue;
+                }
+                fs::remove_dir_all(&dest)
+                    .with_context(|| format!("removing existing {}", dest.display()))?;
+            }
+            // include_dir 0.7 ships `Dir::extract`, but its path semantics did not
+            // round-trip cleanly with this layout. The hand-rolled extract_dir below
+            // is 25 lines of explicit recursion vs reverse-engineering crate internals.
+            extract_dir(entry, &dest)?;
+            installed.push(name);
         }
-        // include_dir 0.7 ships `Dir::extract`, but its path semantics did not
-        // round-trip cleanly with this layout (both `entry.extract(&dest)` and
-        // `entry.extract(&target)` failed with ENOENT during testing). The
-        // hand-rolled `extract_dir` below stays in-place — 25 lines of explicit
-        // recursion is cheaper than reverse-engineering crate-internal path math.
-        extract_dir(entry, &dest)?;
-        installed.push(name);
-    }
 
-    if installed.is_empty() && skipped.is_empty() {
-        anyhow::bail!(
-            "no Quaere skills matched the request. Available: {}",
-            available.join(", ")
-        );
-    }
+        if installed.is_empty() && skipped.is_empty() {
+            anyhow::bail!(
+                "no Quaere skills matched the request. Available: {}",
+                available.join(", ")
+            );
+        }
 
-    // Merge into any existing manifest so that a previous partial install
-    // (e.g. `--skill quaere-semantic`) is not silently dropped by a later
-    // partial install. The merged set is union(prev ∩ disk, installed, skipped).
-    let manifest_file = paths::manifest_path(&target);
-    let mut merged: Vec<String> = Vec::new();
-    if manifest_file.is_file() {
-        let prior = Manifest::read(&manifest_file)?;
-        for name in prior.skills {
-            if target.join(&name).is_dir() {
-                merged.push(name);
+        // Merge into any existing manifest (additive across partial installs).
+        let manifest_file = paths::manifest_path(target);
+        let mut merged: Vec<String> = Vec::new();
+        if manifest_file.is_file() {
+            let prior = Manifest::read(&manifest_file)?;
+            for name in prior.skills {
+                if target.join(&name).is_dir() {
+                    merged.push(name);
+                }
             }
         }
-    }
-    merged.extend(installed.iter().cloned());
-    merged.extend(skipped.iter().cloned());
-    let manifest = Manifest::new(merged);
-    manifest.write(&manifest_file)?;
+        merged.extend(installed.iter().cloned());
+        merged.extend(skipped.iter().cloned());
+        let manifest = Manifest::new(merged);
+        manifest.write(&manifest_file)?;
 
-    for name in &installed {
-        println!("installed {}", name);
-    }
-    for name in &skipped {
-        println!(
-            "skipped  {} (already present; pass --force to overwrite)",
-            name
-        );
-    }
-    println!("target   {}", target.display());
+        for name in &installed {
+            println!("installed {}", name);
+        }
+        for name in &skipped {
+            println!(
+                "skipped  {} (already present; pass --force to overwrite)",
+                name
+            );
+        }
+        println!("target   {}", target.display());
+        if multi {
+            println!();
+        }
 
-    // Show available slash commands so users know what to type in their agent.
-    let mut all_names: Vec<&String> = installed.iter().chain(skipped.iter()).collect();
-    all_names.sort();
-    if !all_names.is_empty() {
+        // Collect skill names for the Commands block (same across targets).
+        if all_skill_names.is_empty() {
+            let mut names: Vec<String> = installed.iter().chain(skipped.iter()).cloned().collect();
+            names.sort();
+            all_skill_names = names;
+        }
+    }
+
+    // Print Commands block once after all targets are done.
+    if !all_skill_names.is_empty() {
         println!();
         println!("Commands:");
-        for name in &all_names {
+        for name in &all_skill_names {
             println!("  /{}", name);
         }
     }
