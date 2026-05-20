@@ -27,6 +27,23 @@ fi
 npm install -g "@openai/codex-cli@${CODEX_VERSION}"
 codex --version
 
+# 2.5. Restore Codex auth state forwarded by the agent harness, if any.
+#      See install-baseline.sh for the rationale (vendor-sanctioned auth.json
+#      transport via the docker cp flow). Block held identical to baseline so
+#      both modes establish the Codex session the same way.
+if [[ -f /installed-agent/auth.json ]]; then
+    mkdir -p "$HOME/.codex"
+    install -m 0600 /installed-agent/auth.json "$HOME/.codex/auth.json"
+    if [[ -f /installed-agent/config.toml ]]; then
+        install -m 0600 /installed-agent/config.toml "$HOME/.codex/config.toml"
+    fi
+    if ! codex login status >/dev/null 2>&1; then
+        echo "ERROR: forwarded codex auth.json did not establish a session; aborting." >&2
+        exit 1
+    fi
+    echo "codex login state restored from host"
+fi
+
 # 3. Quaere CLI via the curl one-liner. Uses the prebuilt binary path (no
 #    Rust toolchain in the container), with SHA256 verification baked into
 #    install.sh. Falls back to cargo install only if explicitly requested

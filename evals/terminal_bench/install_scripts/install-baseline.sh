@@ -28,6 +28,25 @@ fi
 npm install -g "@openai/codex-cli@${CODEX_VERSION}"
 codex --version
 
+# 2.5. Restore Codex auth state forwarded by the agent harness, if any. The
+#      adapter calls session.copy_to_container(~/.codex/auth.json, ...) before
+#      this script runs (see evals/terminal_bench/agents/quaere_tb_codex.py).
+#      This is the vendor-sanctioned `docker cp` flow per
+#      developers.openai.com/codex/auth. If no auth.json was forwarded, we
+#      fall through to OPENAI_API_KEY / env-only paths.
+if [[ -f /installed-agent/auth.json ]]; then
+    mkdir -p "$HOME/.codex"
+    install -m 0600 /installed-agent/auth.json "$HOME/.codex/auth.json"
+    if [[ -f /installed-agent/config.toml ]]; then
+        install -m 0600 /installed-agent/config.toml "$HOME/.codex/config.toml"
+    fi
+    if ! codex login status >/dev/null 2>&1; then
+        echo "ERROR: forwarded codex auth.json did not establish a session; aborting." >&2
+        exit 1
+    fi
+    echo "codex login state restored from host"
+fi
+
 # 3. Sanity assertion: ~/.claude/skills/ MUST NOT contain Quaere skills here.
 #    A leaked install would void the control measurement.
 mkdir -p "$HOME/.claude/skills"
