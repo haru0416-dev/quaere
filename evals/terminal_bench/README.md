@@ -75,19 +75,25 @@ uv tool install terminal-bench
 # or:
 pip install terminal-bench
 
-# 2. Point Terminal-Bench at the adapter package.
-export TB_AGENT_REGISTRY=$(pwd)/evals/terminal_bench
+# 2. Make the adapter package importable. Run from the repo root so
+#    `evals.terminal_bench.agents.quaere_tb_codex` resolves; the agent's
+#    own __init__.py uses that path.
+export PYTHONPATH="$(pwd)"
 
-# 3. Smoke phase: run one task per mode to verify wire-up.
+# 3. Smoke phase: run one task per mode to verify wire-up. Both
+#    --agent-import-path values point at classes in the adapter module
+#    (registered names quaere-tb-codex-baseline / -with-skill).
 tb run \
-  --agent quaere-tb-codex-baseline \
-  --task hello-world \
-  --output-dir "$(pwd)/eval-results/tb-smoke-$(date -u +%Y%m%dT%H%M%SZ)"
+  --agent-import-path evals.terminal_bench.agents.quaere_tb_codex:QuaereTbCodexBaseline \
+  --dataset 'terminal-bench-core==0.1.1' \
+  --task-id hello-world \
+  --output-path "$(pwd)/eval-results/tb-smoke-$(date -u +%Y%m%dT%H%M%SZ)-baseline"
 
 tb run \
-  --agent quaere-tb-codex-with-skill \
-  --task hello-world \
-  --output-dir "$(pwd)/eval-results/tb-smoke-$(date -u +%Y%m%dT%H%M%SZ)"
+  --agent-import-path evals.terminal_bench.agents.quaere_tb_codex:QuaereTbCodexWithSkill \
+  --dataset 'terminal-bench-core==0.1.1' \
+  --task-id hello-world \
+  --output-path "$(pwd)/eval-results/tb-smoke-$(date -u +%Y%m%dT%H%M%SZ)-with-skill"
 ```
 
 If the baseline run reports any `~/.claude/skills/quaere-*` after install,
