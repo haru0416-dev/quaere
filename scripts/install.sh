@@ -17,7 +17,7 @@ set -eu
 QUAERE_REPO="${QUAERE_REPO:-haru0416-dev/quaere}"
 QUAERE_VERSION="${QUAERE_VERSION:-latest}"
 QUAERE_INSTALL_DIR="${QUAERE_INSTALL_DIR:-$HOME/.local/bin}"
-QUAERE_SKILLS="${QUAERE_SKILLS:-1}"
+QUAERE_SKILLS="${QUAERE_SKILLS:-0}"
 
 log()  { printf '%s\n' "==> $*" >&2; }
 warn() { printf '%s\n' "warning: $*" >&2; }
@@ -116,7 +116,9 @@ if [ "$QUAERE_SKILLS" = "1" ]; then
     "$QUAERE_INSTALL_DIR/quaere" install --force \
         || warn "skill install step exited non-zero; run \`quaere install\` manually"
 else
-    log "skipping skill install (QUAERE_SKILLS=0); run \`quaere install\` later"
+    log "binary installed. Next step: run \`quaere install\` to deploy skills to your agent."
+    log "  Claude Code: quaere install"
+    log "  Codex:       quaere install --target ~/.agents/skills"
 fi
 
 # PATH hint.

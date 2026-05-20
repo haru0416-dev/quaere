@@ -94,12 +94,17 @@ quaere-semantic → quaere-grounding → quaere-evidence → quaere-execution
 ### curl ワンライナー (推奨)
 
 ```bash
+# 1. CLI バイナリをインストール
 curl -fsSL https://quaere.dev/install.sh | sh
+
+# 2. スキルをエージェントに展開
+quaere install                                  # Claude Code  → ~/.claude/skills/
+quaere install --target ~/.agents/skills        # Codex        → ~/.agents/skills/
 ```
 
-プラットフォーム向けの `quaere` CLI を取得し、release の `SHA256SUMS` と照合してから `$HOME/.local/bin/quaere` に置き、続けて `quaere install` でスキル本体を `~/.claude/skills/` へ展開する。
+curl ステップではバイナリの取得・チェックサム検証・`$HOME/.local/bin/quaere` への配置のみを行う。`quaere install` は自動実行しないので、ターゲットを選んで明示的に実行する。
 
-環境変数で上書きできる項目: `QUAERE_VERSION` (タグ固定)、`QUAERE_REPO` (fork から取得)、`QUAERE_INSTALL_DIR` (バイナリの配置先)、`QUAERE_SKILLS=0` (スキル展開のスキップ)。
+環境変数で上書きできる項目: `QUAERE_VERSION` (タグ固定)、`QUAERE_REPO` (fork から取得)、`QUAERE_INSTALL_DIR` (バイナリの配置先)、`QUAERE_SKILLS=1` (`quaere install` を自動実行; デフォルトは `~/.claude/skills/`)。
 
 ### cargo install (Rust 環境がある場合)
 
