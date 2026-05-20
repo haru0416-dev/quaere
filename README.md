@@ -104,17 +104,18 @@ If two skills seem plausible, choose the one that answers the blocking question 
 ### Recommended: curl one-liner
 
 ```bash
-# 1. Install the CLI binary
 curl -fsSL https://quaere.dev/install.sh | sh
-
-# 2. Deploy skills to your agent
-quaere install                                  # Claude Code  → ~/.claude/skills/
-quaere install --target ~/.agents/skills        # Codex        → ~/.agents/skills/
 ```
 
-The curl step downloads the `quaere` binary for your platform, verifies its checksum against the release `SHA256SUMS`, and places it in `$HOME/.local/bin/quaere`. It does **not** run `quaere install` automatically — that is the explicit second step so you can choose the target.
+Downloads the `quaere` binary, verifies its checksum against the release `SHA256SUMS`, places it in `$HOME/.local/bin/quaere`, runs `quaere install` to deploy skills to `~/.claude/skills/`, and prints the available slash commands.
 
-Environment overrides: `QUAERE_VERSION` to pin a tag, `QUAERE_REPO` to install from a fork, `QUAERE_INSTALL_DIR` to relocate the binary, `QUAERE_SKILLS=1` to run `quaere install` automatically (defaults to `~/.claude/skills/`).
+**Codex users:** the installer prints a one-liner at the end — run it to also deploy to `~/.agents/skills/`:
+
+```bash
+quaere install --target ~/.agents/skills
+```
+
+Environment overrides: `QUAERE_VERSION` to pin a tag, `QUAERE_REPO` to install from a fork, `QUAERE_INSTALL_DIR` to relocate the binary, `QUAERE_SKILLS=0` to skip skill deployment.
 
 ### cargo install (Rust toolchain users)
 
