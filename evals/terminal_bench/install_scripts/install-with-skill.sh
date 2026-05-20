@@ -24,7 +24,7 @@ if ! command -v curl >/dev/null 2>&1 || ! command -v node >/dev/null 2>&1; then
 fi
 
 # 2. Codex CLI pinned identically to baseline.
-npm install -g "@openai/codex-cli@${CODEX_VERSION}"
+npm install -g "@openai/codex@${CODEX_VERSION}"
 codex --version
 
 # 2.5. Restore Codex auth state forwarded by the agent harness, if any.
@@ -49,6 +49,16 @@ fi
 #    install.sh. Falls back to cargo install only if explicitly requested
 #    via QUAERE_USE_CARGO=1.
 if [[ "${QUAERE_USE_CARGO:-0}" == "1" ]]; then
+    # cargo build needs a working C toolchain to link the rustls / openssl
+    # build scripts; the default Debian Bookworm tb container does not ship
+    # one, so install build-essential before invoking cargo. The earlier
+    # node-setup block does `rm -rf /var/lib/apt/lists/*`, so refresh the
+    # index first or apt cannot resolve the package.
+    if ! command -v cc >/dev/null 2>&1; then
+        apt-get update -y
+        apt-get install -y --no-install-recommends build-essential pkg-config
+        rm -rf /var/lib/apt/lists/*
+    fi
     if ! command -v cargo >/dev/null 2>&1; then
         curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
         # shellcheck source=/dev/null

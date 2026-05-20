@@ -25,7 +25,7 @@ fi
 
 # 2. Codex CLI pinned to a known-good version (held constant across baseline
 #    and with-skill so the only treatment difference is the skill set on disk).
-npm install -g "@openai/codex-cli@${CODEX_VERSION}"
+npm install -g "@openai/codex@${CODEX_VERSION}"
 codex --version
 
 # 2.5. Restore Codex auth state forwarded by the agent harness, if any. The
