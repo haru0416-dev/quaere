@@ -68,7 +68,8 @@ The benchmark plan ships in three phases:
 1. **Smoke** (5–10 hand-picked tasks across SWE / sysadmin / security).
    - Confirms both install scripts succeed inside the task container.
    - Confirms `quaere doctor` inside the with-skill container reports
-     `quaere 0.2.0` and lists the five `quaere-*` skills.
+     the expected Quaere CLI version (matches the in-tree pin) and lists
+     the five `quaere-*` skills.
    - Calibrates API cost per task before committing to the full suite.
 
 2. **Full suite** (terminal-bench-core v0.1.1 — 80 tasks, both modes, ≥2 runs).
