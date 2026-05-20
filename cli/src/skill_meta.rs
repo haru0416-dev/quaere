@@ -104,10 +104,16 @@ fn parse_frontmatter(text: &str, issues: &mut Vec<String>) -> HashMap<String, St
             continue;
         };
         let key = key.trim().to_owned();
-        let value = value
-            .trim()
-            .trim_matches(|c| c == '"' || c == '\'')
-            .to_owned();
+        let raw = value.trim();
+        let is_quoted = (raw.starts_with('"') && raw.ends_with('"'))
+            || (raw.starts_with('\'') && raw.ends_with('\''));
+        if raw.contains(": ") && !is_quoted {
+            issues.push(format!(
+                "frontmatter value containing ': ' must be quoted: `{}`",
+                raw
+            ));
+        }
+        let value = raw.trim_matches(|c| c == '"' || c == '\'').to_owned();
         fm.insert(key, value);
     }
     issues.push("missing closing frontmatter delimiter".to_owned());
