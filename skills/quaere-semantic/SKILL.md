@@ -44,6 +44,18 @@ Three tiers. Choose by *scope*: how many units, the cost of misreading them, and
 
 If the target is too large for one response, say which units were covered, which were deferred, and what order to continue in. Do not pad output to fill an imagined time budget — output length should match the unit count and slicing depth, not a clock.
 
+## Meaningful unit selection
+
+Analyze a unit if it:
+
+- is exported or called across module boundaries
+- mutates state, cache, storage, network, process, auth, or filesystem
+- crosses a trust, API, or protocol boundary
+- encodes a domain branch or invariant
+- is touched by the planned change
+
+Collapse pure local helpers into their caller unless they carry a separate invariant or failure mode. The goal is not exhaustive coverage — it is to avoid missing a meaningful boundary. A unit that passes none of the above conditions can be noted as `skipped: local helper, no independent invariant`.
+
 ## Core procedure
 
 ### Step 0 — Module hypothesis (pre-pass)
@@ -197,6 +209,18 @@ Even with this skill loaded, agents drift in recognizable ways. The first column
 - **Compressing output to seem efficient.** The user accepted the cost when invoking this skill (see *Industry baseline* — full comprehension is the deliberate exception). Compression fails because the deliverable *is* the analysis; a terser review is just paraphrase wearing different formatting.
 
 ## Handoff to other skills
+
+When handing off, emit this standard block:
+
+```
+Handoff
+- From skill: quaere-semantic
+- Blocking question: <what cannot be resolved through code reading alone>
+- Confirmed inputs: <What/Why/Invariants/Failure/Connections fields that can be carried forward as facts>
+- Inconclusive inputs: <Why claims marked "plausible" or "UNKNOWN" — not safe to treat as confirmed>
+- Required next skill: <quaere-grounding | quaere-evidence | quaere-execution | quaere-audit>
+- Stop condition: <what the next skill must return before implementation or deeper audit can proceed>
+```
 
 Semantic review ends at understanding. When the next step needs a different discipline, name the handoff explicitly rather than continuing to read.
 

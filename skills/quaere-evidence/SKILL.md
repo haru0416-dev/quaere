@@ -13,6 +13,42 @@ license: MIT
 
 This is not ceremony. Review and debugging drift toward confirmation: once an agent sees a plausible cause, it collects facts that fit and edits before testing whether another explanation fits better. The gate is simple: before acting, state what would make the hypothesis or review claim wrong, run or name the smallest probe that could reveal that, then decide. If a claim cannot be falsified at the current scope, label it `inconclusive` or hand it off; do not promote it by sounding confident.
 
+## Output contract
+
+Emit these labeled sections exactly, in this order, even in lightweight mode:
+
+1. **Scope / safety constraints**
+2. **Findings**
+3. **Claims / Hypotheses**
+4. **Defense and probes**
+5. **Decision**
+6. **Patch** *(omit if no fix is needed)*
+7. **Verification**
+8. **Handoff**
+
+If a section is not applicable, write: `skipped because: <reason>`
+
+### Lightweight evidence pass
+
+When scope is small (one claim, low blast radius), collapse to this minimum — but never omit the falsifier or disconfirming probe:
+
+```
+Findings:
+- F1: <observed fact + source>
+
+Claim:
+- C1: <falsifiable claim>
+- Backing: F1
+- Falsifier: <what would prove it wrong>
+- Disconfirming probe: <probe / result, or "not yet run">
+
+Decision: accept | reject | inconclusive
+
+Verification:
+- <fresh command / result, or "unavailable because ...">
+```
+
+The full 10-field Review Claim format (in the Workflow section) applies to Standard and Deep investigations. The lightweight pass is the same gate run with fewer words — not a bypass.
 
 ## When to use
 
@@ -363,6 +399,18 @@ Verification
 - **Forced certainty.** Some investigations end `inconclusive`. That is a useful result when the alternative is inventing a confident but unsupported patch.
 
 ## Handoff to other skills
+
+When handing off, emit this standard block so the receiving skill knows exactly what it is being given:
+
+```
+Handoff
+- From skill: quaere-evidence
+- Blocking question: <what cannot be decided within this skill's scope>
+- Confirmed inputs: <findings, claims, and decisions safe to carry forward>
+- Inconclusive inputs: <claims or facts not safe to treat as true>
+- Required next skill: <quaere-grounding | quaere-semantic | quaere-execution | quaere-audit>
+- Stop condition: <what the next skill must return before this investigation can resume>
+```
 
 Hand control to a companion skill when the blocking question shifts. Name the handoff and the reason in the response — do not silently switch.
 

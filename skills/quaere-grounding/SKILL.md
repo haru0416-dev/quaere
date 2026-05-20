@@ -66,11 +66,26 @@ Version Fit        whether the claim applies to the local anchor
 Conflict Check     docs vs local types/source/runtime/issues/advisories
 Executable Probe   mandatory before `confirmed` on version-sensitive claims
 Lateral Check      independent corroborator — single-source claims do not pass
-Decision           confirmed / version-mismatched / stale / conflicted / inconclusive
+Decision           confirmed / locally observed / version-mismatched / stale / conflicted / inconclusive
 Handoff            implementation constraints, source URLs or local paths, and remaining uncertainty
 ```
 
 Use the lightest version of this model that still satisfies the dual-axis gate.
+
+## Claim result matrix
+
+| Evidence available | Decision label |
+|---|---|
+| Executable probe + independent lateral corroborator + version fit | `confirmed` |
+| Executable probe only (no independent lateral) | `locally observed` — not confirmed as external fact |
+| Official docs only, no local probe | `documented` — not locally confirmed |
+| Local anchor conflicts with docs | `version-mismatched` or `conflicted` |
+| Single source, no probe | `inconclusive` |
+| No network; local source + executable probe | `local-only` — external claim cannot be confirmed |
+
+**`locally observed`** is a distinct intermediate label. It means the behavior was verified in the local environment but has not been corroborated by an independent external source. Use it when an executable probe succeeded but the claim depends on a broader external fact (API contract, package behavior across versions) that a single local run cannot fully cover. Do not promote to `confirmed` without a lateral corroborator.
+
+Note: multiple sources that derive from the same resolution (e.g., `package.json`, lockfile, and installed types all reflect the same dependency graph) are not independent corroborators. Independence requires a structurally separate source — changelog, official docs, a different probe mechanism, or a commit-level reference.
 
 ## Workflow
 
@@ -181,9 +196,10 @@ Apply both axes — source axis (Step 5) and claim-credibility axis (Steps 7 + 8
 - **version-mismatched** — claim may be true for another version, but not for the local anchor. Source axis passes; version-fit axis fails.
 - **stale** — the source predates a relevant release, migration, advisory, or deprecation, or lacks date/version information for a time-sensitive fact.
 - **conflicted** — credible sources disagree, or docs and local types/runtime disagree (Step 6 surfaced the disagreement).
+- **locally observed** — executable probe succeeded locally, but no independent lateral corroborator has been applied. The behavior was seen, not confirmed as an external fact. Usable as local evidence, not as a grounded external claim.
 - **inconclusive** — single-source (no lateral corroborator), no executable probe possible, or the needed fact could not be verified.
 
-Only `confirmed` claims become implementation constraints. `version-mismatched`, `stale`, `conflicted`, and `inconclusive` claims must not be used as if true.
+Only `confirmed` claims become implementation constraints. `locally observed`, `version-mismatched`, `stale`, `conflicted`, and `inconclusive` claims must not be used as if true.
 
 ### 10. No-network fallback strategy
 
@@ -307,6 +323,18 @@ Handoff
 ```
 
 ## Handoff to other skills
+
+When handing off, emit this standard block:
+
+```
+Handoff
+- From skill: quaere-grounding
+- Blocking question: <what external fact could not be confirmed here>
+- Confirmed inputs: <claims reaching "confirmed" status — safe to use as implementation constraints>
+- Inconclusive inputs: <locally observed / inconclusive / version-mismatched / stale facts — not safe to use as true>
+- Required next skill: <quaere-evidence | quaere-execution | quaere-audit | quaere-semantic>
+- Stop condition: <what the next skill must do with the confirmed / inconclusive facts>
+```
 
 When implementation is next, hand off to `quaere-execution` with `Use / Do not use / Verification needed` constraints, plus the executable-probe results that confirmed each constraint. The quaere-execution should re-run the probes after edits to detect regression to docs-trust.
 
