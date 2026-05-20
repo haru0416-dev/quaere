@@ -48,8 +48,8 @@ os_kind=$(uname -s)
 arch=$(uname -m)
 
 case "$os_kind" in
-    Linux)   os="unknown-linux-gnu"  ;;
-    Darwin)  os="apple-darwin"       ;;
+    Linux)   primary_os="unknown-linux-musl"  ;;
+    Darwin)  primary_os="apple-darwin"        ;;
     *)       fail "unsupported OS: $os_kind (Quaere builds Linux + macOS)" ;;
 esac
 
@@ -59,7 +59,7 @@ case "$arch" in
     *)                    fail "unsupported architecture: $arch" ;;
 esac
 
-target="${arch}-${os}"
+target="${arch}-${primary_os}"
 log "detected target: $target"
 
 # Resolve the version tag.
@@ -87,8 +87,22 @@ tmp=$(mktemp -d 2>/dev/null || mktemp -d -t quaere)
 trap 'rm -rf "$tmp"' EXIT
 
 log "downloading $archive"
-curl -fsSL --retry 3 -o "$tmp/$archive" "$archive_url" \
-    || fail "could not download $archive_url"
+if ! curl -fsSL --retry 3 -o "$tmp/$archive" "$archive_url"; then
+    # v0.3.0 and earlier shipped GLIBC linux binaries (-unknown-linux-gnu);
+    # v0.3.1+ ships musl static (-unknown-linux-musl). Fall back so users
+    # who pin QUAERE_VERSION to an older tag still get a working install.
+    if [ "$os_kind" = "Linux" ] && [ "$primary_os" = "unknown-linux-musl" ]; then
+        log "musl artifact unavailable for $tag; falling back to GLIBC linux build"
+        target="${arch}-unknown-linux-gnu"
+        archive="quaere-${tag}-${target}.tar.gz"
+        archive_url="${base}/${archive}"
+        log "downloading $archive"
+        curl -fsSL --retry 3 -o "$tmp/$archive" "$archive_url" \
+            || fail "could not download $archive_url"
+    else
+        fail "could not download $archive_url"
+    fi
+fi
 
 log "downloading SHA256SUMS"
 curl -fsSL --retry 3 -o "$tmp/SHA256SUMS" "$sums_url" \
