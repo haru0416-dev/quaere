@@ -88,6 +88,13 @@ def _shared_env() -> dict[str, str]:
         "ANTHROPIC_API_KEY",  # codex may pass-through to anthropic backends
         "CODEX_MODEL",
         "CODEX_HOME",
+        # Forwarded so the with-skill install script (`install-with-skill.sh`)
+        # can switch from the prebuilt-binary path to cargo when the host has
+        # opted into source builds inside the container. Needed today because
+        # the v0.3.0 Linux binary was built against GLIBC 2.39 and the tb
+        # task containers (Debian Bookworm) ship GLIBC 2.36.
+        "QUAERE_USE_CARGO",
+        "QUAERE_VERSION",
     ):
         value = os.environ.get(var)
         if value is not None:
@@ -100,11 +107,28 @@ def _run_codex_command(task_description: str) -> "TerminalCommand":
 
     Uses printf + shlex.quote so that arbitrary task content — including lines
     that would close a heredoc — cannot escape into the enclosing shell.
+
+    Flags:
+
+    - `--skip-git-repo-check`: tb task containers do not initialise a git repo,
+      so codex's default refusal to run outside a repo would otherwise abort
+      every task with "Not inside a trusted directory".
+    - `--dangerously-bypass-approvals-and-sandbox`: the per-task container is
+      itself the sandbox boundary; codex's own help text recommends this flag
+      "for running in environments that are externally sandboxed". Without it,
+      interactive approval prompts hang non-interactive `codex exec`.
     """
     from terminal_bench.agents.installed_agents.abstract_installed_agent import TerminalCommand
 
-    command = f"printf '%s\\n' {shlex.quote(task_description)} | {CODEX_BIN} exec -"
-    return TerminalCommand(command=command, max_timeout_sec=900)
+    command = (
+        f"printf '%s\\n' {shlex.quote(task_description)} | "
+        f"{CODEX_BIN} exec --skip-git-repo-check "
+        f"--dangerously-bypass-approvals-and-sandbox -"
+    )
+    # block=True so the harness waits up to max_timeout_sec for codex to
+    # finish; the default (False) returns immediately after the keys are
+    # sent and the test phase starts before codex has time to act.
+    return TerminalCommand(command=command, max_timeout_sec=900, block=True)
 
 
 def _import_abstract_installed_agent() -> type:
