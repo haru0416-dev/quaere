@@ -107,13 +107,7 @@ If two skills seem plausible, choose the one that answers the blocking question 
 curl -fsSL https://quaere.dev/install.sh | sh
 ```
 
-Downloads the `quaere` binary, verifies its checksum against the release `SHA256SUMS`, places it in `$HOME/.local/bin/quaere`, runs `quaere install` to deploy skills to `~/.claude/skills/`, and prints the available slash commands.
-
-**Codex users:** the installer prints a one-liner at the end — run it to also deploy to `~/.agents/skills/`:
-
-```bash
-quaere install --target ~/.agents/skills
-```
+Downloads the `quaere` binary, verifies its checksum, places it in `$HOME/.local/bin/quaere`, runs `quaere install all` to deploy skills to both Claude Code and Codex, and prints the available slash commands.
 
 Environment overrides: `QUAERE_VERSION` to pin a tag, `QUAERE_REPO` to install from a fork, `QUAERE_INSTALL_DIR` to relocate the binary, `QUAERE_SKILLS=0` to skip skill deployment.
 
@@ -121,7 +115,7 @@ Environment overrides: `QUAERE_VERSION` to pin a tag, `QUAERE_REPO` to install f
 
 ```bash
 cargo install quaere-cli
-quaere install
+quaere install all
 ```
 
 `cargo install` builds the CLI from source and the second command extracts the bundled skills.
@@ -130,10 +124,10 @@ quaere install
 
 ```bash
 brew install haru0416-dev/quaere/quaere
-quaere install
+quaere install all
 ```
 
-The formula lives in the dedicated tap repository [`haru0416-dev/homebrew-quaere`](https://github.com/haru0416-dev/homebrew-quaere). It pulls the same release tarballs as the curl installer and verifies them against the recorded `SHA256SUMS`. `quaere install` then extracts the skill set to `~/.claude/skills/`.
+The formula lives in the dedicated tap repository [`haru0416-dev/homebrew-quaere`](https://github.com/haru0416-dev/homebrew-quaere). It pulls the same release tarballs as the curl installer and verifies them against the recorded `SHA256SUMS`. `quaere install all` then deploys skills to both Claude Code and Codex.
 
 ### Manual (source checkout)
 

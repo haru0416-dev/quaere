@@ -94,21 +94,10 @@ quaere-semantic → quaere-grounding → quaere-evidence → quaere-execution
 ### curl ワンライナー (推奨)
 
 ```bash
-# 1. CLI バイナリをインストール
 curl -fsSL https://quaere.dev/install.sh | sh
-
-# 2. スキルをエージェントに展開
-quaere install                                  # Claude Code  → ~/.claude/skills/
-quaere install --target ~/.agents/skills        # Codex        → ~/.agents/skills/
 ```
 
-バイナリの取得・チェックサム検証・`$HOME/.local/bin/quaere` への配置・`quaere install` によるスキルの `~/.claude/skills/` への展開、そして利用可能なスラッシュコマンドの表示までを一括で行う。
-
-**Codex ユーザー**: インストーラの末尾に表示されるコマンドを追加実行する:
-
-```bash
-quaere install --target ~/.agents/skills
-```
+バイナリの取得・チェックサム検証・`$HOME/.local/bin/quaere` への配置・`quaere install all` によるスキル展開・利用可能コマンドの表示を一括で行う。
 
 環境変数で上書きできる項目: `QUAERE_VERSION` (タグ固定)、`QUAERE_REPO` (fork から取得)、`QUAERE_INSTALL_DIR` (バイナリの配置先)、`QUAERE_SKILLS=0` (スキル展開のスキップ)。
 
@@ -116,10 +105,10 @@ quaere install --target ~/.agents/skills
 
 ```bash
 cargo install quaere-cli
-quaere install
+quaere install all
 ```
 
-二つ目で内蔵スキルを展開する。
+二つ目で内蔵スキルを両エージェントに展開する。
 
 ### Homebrew
 
