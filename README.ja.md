@@ -102,9 +102,15 @@ quaere install                                  # Claude Code  → ~/.claude/ski
 quaere install --target ~/.agents/skills        # Codex        → ~/.agents/skills/
 ```
 
-curl ステップではバイナリの取得・チェックサム検証・`$HOME/.local/bin/quaere` への配置のみを行う。`quaere install` は自動実行しないので、ターゲットを選んで明示的に実行する。
+バイナリの取得・チェックサム検証・`$HOME/.local/bin/quaere` への配置・`quaere install` によるスキルの `~/.claude/skills/` への展開、そして利用可能なスラッシュコマンドの表示までを一括で行う。
 
-環境変数で上書きできる項目: `QUAERE_VERSION` (タグ固定)、`QUAERE_REPO` (fork から取得)、`QUAERE_INSTALL_DIR` (バイナリの配置先)、`QUAERE_SKILLS=1` (`quaere install` を自動実行; デフォルトは `~/.claude/skills/`)。
+**Codex ユーザー**: インストーラの末尾に表示されるコマンドを追加実行する:
+
+```bash
+quaere install --target ~/.agents/skills
+```
+
+環境変数で上書きできる項目: `QUAERE_VERSION` (タグ固定)、`QUAERE_REPO` (fork から取得)、`QUAERE_INSTALL_DIR` (バイナリの配置先)、`QUAERE_SKILLS=0` (スキル展開のスキップ)。
 
 ### cargo install (Rust 環境がある場合)
 

@@ -130,6 +130,17 @@ pub fn run(args: Args) -> Result<()> {
     }
     println!("target   {}", target.display());
 
+    // Show available slash commands so users know what to type in their agent.
+    let mut all_names: Vec<&String> = installed.iter().chain(skipped.iter()).collect();
+    all_names.sort();
+    if !all_names.is_empty() {
+        println!();
+        println!("Commands:");
+        for name in &all_names {
+            println!("  /{}", name);
+        }
+    }
+
     Ok(())
 }
 
