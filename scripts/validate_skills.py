@@ -14,7 +14,7 @@ SKILLS_DIR = ROOT / "skills"
 README = ROOT / "README.md"
 EXAMPLES = ROOT / "examples" / "README.md"
 SCENARIOS = ROOT / "evals" / "scenarios.json"
-MAX_SKILL_LINES = 600
+MAX_SKILL_LINES = 500
 
 # Required blocks that must appear in specific SKILL.md files.
 # Key: skill directory name. Value: list of (pattern, description) pairs.
