@@ -27,7 +27,19 @@ The name comes from Latin *quaere* — "ask", "seek", "interrogate". Every skill
 
 ### Measured effect
 
-Quaere v0.2.0 was evaluated end-to-end through Codex CLI 0.128.0 against 14 scenarios with 90 deterministic assertions (`--scenarios-extra evals/scenarios.ja.json` enabled). Two independent baseline + with-skill sweeps:
+**v0.2.1** — 18 scenarios / 97 deterministic assertions (14 original + 4 new adversarial), single-run via Codex CLI:
+
+| mode                | assertion pass rate | scenario-level            |
+| ------------------- | ------------------: | ------------------------: |
+| Baseline (no skill) | 60% (58 / 97)       | 0 / 18 pass               |
+| **With skill**      | **87% (84 / 97)**   | **8 pass · 4 inconclusive · 6 fail** |
+| Δ                   | **+27 pp**          |                           |
+
+4 inconclusive scenarios have zero failed assertions; they contain `not_in_baseline` assertions that require a baseline run to resolve. 4 timeouts in the with-skill sweep (complex skill prompts + multi-step scenarios) account for most remaining failures.
+
+The 4 new adversarial scenarios (urgency pressure, skip-test pressure, docs blind-trust, baseless security assertion) score 92% with-skill vs ~46% baseline — the largest skill-vs-baseline gap in the suite.
+
+**v0.2.0** — 14 scenarios / 90 assertions, two independent sweeps via Codex CLI 0.128.0:
 
 | mode                | range (2 runs)    |
 | ------------------- | ----------------: |
@@ -35,9 +47,9 @@ Quaere v0.2.0 was evaluated end-to-end through Codex CLI 0.128.0 against 14 scen
 | **With skill**      | **91.1 – 94.4%**  |
 | Δ                   | **+27 to +29 pp** |
 
-Compared to v0.1.0 (with-skill 89.8% / Δ +28 pp), v0.2.0 lifts the upper bound of with-skill by ~+4.6 pp and keeps Δ in the same band. Run-to-run variance is real for stochastic LLM output; numbers above should be read as a range, not a point estimate.
+v0.1.0 baseline: with-skill 89.8% / Δ +28 pp. Run-to-run variance is real for stochastic LLM output; numbers should be read as a range, not a point estimate.
 
-The eval harness lives at `evals/run_skill_evals.py`; the 14 scenarios at `evals/scenarios.json`; Japanese-locale token alternates at `evals/scenarios.ja.json`.
+The eval harness lives at `evals/run_skill_evals.py`; the 18 scenarios at `evals/scenarios.json`; Japanese-locale token alternates at `evals/scenarios.ja.json`.
 
 Cross-runner stability was confirmed during the v0.1.0 measurement: the same `sdk-version-grounding` scenario hit identical 6P/0F with-skill scores on Claude Code 2.1.141 and Codex CLI 0.128.0.
 
@@ -181,7 +193,7 @@ The validator checks frontmatter, directory/name consistency, README coverage, l
 
 ## Skill evaluation
 
-`evals/scenarios.json` contains 14 portable scenario prompts. Seven of them rely on workspace fixtures under [`eval-fixtures/`](eval-fixtures/) — small, vendored projects that give the agent concrete local evidence (pinned `package.json`, vendored docs, fake CLIs, spec files, etc.). The runner copies the fixture into an isolated directory per run so concurrent evaluations do not interfere.
+`evals/scenarios.json` contains 18 portable scenario prompts. Seven of them rely on workspace fixtures under [`eval-fixtures/`](eval-fixtures/) — small, vendored projects that give the agent concrete local evidence (pinned `package.json`, vendored docs, fake CLIs, spec files, etc.). The runner copies the fixture into an isolated directory per run so concurrent evaluations do not interfere.
 
 Run scenarios through any local agent CLI by providing a command template. `--output-dir` should be absolute so the runner can read `$prompt_file` from inside the workspace `cwd`:
 
