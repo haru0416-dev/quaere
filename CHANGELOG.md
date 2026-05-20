@@ -4,6 +4,35 @@ All notable changes to Quaere are documented in this file. The format follows [K
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-05-20
+
+Minor release: introduces an agent-aware install pipeline (`quaere install claude / codex / all`) so the same CLI deploys to both Claude Code (`~/.claude/skills/`) and Codex CLI (`~/.agents/skills/`). The curl one-liner now ends with an explicit `quaere install all` step and a `Commands:` block, and `quaere install --force` swaps skills atomically so a mid-extract failure no longer leaves dest half-written.
+
+### Added
+
+#### Agent-aware install pipeline
+
+- `quaere install` accepts an `agent` positional (`claude` / `codex` / `all`). `claude` targets `~/.claude/skills/`, `codex` targets `~/.agents/skills/`, and `all` writes both, deduplicating by canonical real path so symlinked targets do not produce double-writes. `--target` is preserved as a hidden escape hatch for advanced relocation.
+- The curl installer (`scripts/install.sh`) runs `quaere install all` as an explicit post-download step instead of leaving deployment implicit. The `QUAERE_SKILLS=0` env var skips this step for binary-only installs.
+- Install output ends with a `Commands:` block listing every deployed skill, so users see the slash commands immediately after `curl ... | sh`.
+
+### Changed
+
+- `quaere install --force` now swaps a skill atomically. The new content is staged at `<target>/.<name>.staging`, the previous dest is renamed to `<target>/.<name>.backup`, staging is renamed into place, and only then is the backup removed. A mid-extract I/O failure leaves dest at the previous complete content; previously a `remove_dir_all -> extract` sequence could half-write the dest while the manifest still claimed it as installed. Crash residue (`.staging`, `.backup`) is silently skipped by `quaere doctor`'s orphan policy (dot-prefixed) and reclaimed on the next install.
+- `Agent::targets` and `paths::resolve_target` share a single source for the default install paths via `paths::claude_default` / `paths::codex_default`, eliminating the previous duplicate hardcodes.
+
+### Fixed
+
+- `quaere doctor` flags frontmatter values that contain `: ` when not quoted, matching `scripts/validate_skills.py`. `tests/test_validator_parity.py` pins the cross-validator agreement so future drift fails CI.
+- `validate_skills.py` `MAX_SKILL_LINES` aligned with the Rust doctor at 500 (was 600).
+- `evals/run_skill_evals.py` builds the runner prompt with `printf` instead of heredoc, preventing shell-injection when scenario prompts contain `EOF`-like delimiters.
+- `scripts/install.sh` passes `--strip-components=1` to `tar` so the extracted binary lands at the expected path on all release tarball layouts.
+- `release.yml` `workflow_dispatch` checks out the requested tag ref instead of HEAD, so manual re-runs build the tag the user asked for, not the current `main`.
+
+### Internal
+
+- `.gitignore` excludes `evals/results/` so per-run eval output does not accidentally land in commits.
+
 ## [0.2.1] — 2026-05-20
 
 Infrastructure release: lands the eval-harness graders and Terminal-Bench adapter that v0.3 will use to publish external-benchmark numbers, plus a Skill content pass addressing post-v0.2.0 review feedback. Treated as a PATCH bump because the Skill changes are additive structural improvements — no Iron Laws changed, no existing gates weakened.
