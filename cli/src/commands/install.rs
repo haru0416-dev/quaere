@@ -21,19 +21,12 @@ pub enum Agent {
 
 impl Agent {
     fn targets(&self) -> Result<Vec<(String, PathBuf)>> {
-        let home = dirs::home_dir().context("could not resolve $HOME")?;
         Ok(match self {
-            Agent::Claude => vec![(
-                "Claude Code".to_owned(),
-                home.join(".claude").join("skills"),
-            )],
-            Agent::Codex => vec![("Codex".to_owned(), home.join(".agents").join("skills"))],
+            Agent::Claude => vec![("Claude Code".to_owned(), paths::claude_default()?)],
+            Agent::Codex => vec![("Codex".to_owned(), paths::codex_default()?)],
             Agent::All => vec![
-                (
-                    "Claude Code".to_owned(),
-                    home.join(".claude").join("skills"),
-                ),
-                ("Codex".to_owned(), home.join(".agents").join("skills")),
+                ("Claude Code".to_owned(), paths::claude_default()?),
+                ("Codex".to_owned(), paths::codex_default()?),
             ],
         })
     }
