@@ -130,18 +130,21 @@ pub fn run(args: Args) -> Result<()> {
             }
 
             let dest = target.join(&name);
-            if dest.exists() {
-                if !args.force {
-                    skipped.push(name);
-                    continue;
-                }
-                fs::remove_dir_all(&dest)
-                    .with_context(|| format!("removing existing {}", dest.display()))?;
+            if dest.exists() && !args.force {
+                skipped.push(name);
+                continue;
             }
             // include_dir 0.7 ships `Dir::extract`, but its path semantics did not
             // round-trip cleanly with this layout. The hand-rolled extract_dir below
             // is 25 lines of explicit recursion vs reverse-engineering crate internals.
-            extract_dir(entry, &dest)?;
+            //
+            // Stage the new content under a sibling directory, then swap it into
+            // place so the previous skill content stays intact if extract_dir or
+            // a later step fails. Without this, --force would remove_dir_all the
+            // dest first and a mid-extract crash would leave the manifest in
+            // sync with a half-written skill that doctor can only report after
+            // the fact.
+            atomic_swap_install(entry, target, &name, &dest)?;
             installed.push(name);
         }
 
@@ -197,6 +200,54 @@ pub fn run(args: Args) -> Result<()> {
         for name in &all_skill_names {
             println!("  /{}", name);
         }
+    }
+
+    Ok(())
+}
+
+/// Install (or overwrite) one skill at `dest` by staging the embedded
+/// content in a sibling `.<name>.staging` directory, then renaming the
+/// previous content (if any) to `.<name>.backup`, then renaming staging
+/// to `dest`. The dest is therefore either the previous complete content
+/// or the new complete content at any observable moment; a mid-extract
+/// failure cannot leave dest in a half-written state.
+fn atomic_swap_install(entry: &Dir<'_>, target: &Path, name: &str, dest: &Path) -> Result<()> {
+    let staging = target.join(format!(".{}.staging", name));
+    let backup = target.join(format!(".{}.backup", name));
+
+    // Clear any residue from a prior interrupted install before staging again.
+    if staging.exists() {
+        fs::remove_dir_all(&staging)
+            .with_context(|| format!("removing stale staging {}", staging.display()))?;
+    }
+
+    if let Err(e) = extract_dir(entry, &staging) {
+        // Leave no orphan staging directory behind on failure.
+        let _ = fs::remove_dir_all(&staging);
+        return Err(e);
+    }
+
+    if dest.exists() {
+        // Clear any residue from a prior interrupted swap before reusing the path.
+        if backup.exists() {
+            fs::remove_dir_all(&backup)
+                .with_context(|| format!("removing stale backup {}", backup.display()))?;
+        }
+        fs::rename(dest, &backup)
+            .with_context(|| format!("backing up {} to {}", dest.display(), backup.display()))?;
+        if let Err(e) = fs::rename(&staging, dest) {
+            // Restore the previous content before reporting failure so the
+            // caller does not observe a missing dest.
+            let _ = fs::rename(&backup, dest);
+            let _ = fs::remove_dir_all(&staging);
+            return Err(e)
+                .with_context(|| format!("renaming {} to {}", staging.display(), dest.display()));
+        }
+        fs::remove_dir_all(&backup)
+            .with_context(|| format!("removing backup {}", backup.display()))?;
+    } else {
+        fs::rename(&staging, dest)
+            .with_context(|| format!("renaming {} to {}", staging.display(), dest.display()))?;
     }
 
     Ok(())
