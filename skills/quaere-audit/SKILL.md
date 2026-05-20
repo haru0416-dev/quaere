@@ -167,10 +167,32 @@ Findings by decision:
 Rejected Claims:
 Uncovered Risks / Skipped Tools:
 Verification / Safe Repro:
+Tier companion decisions:
+Tier promotion probe:
 Handoff:
 ```
 
 Keep these sections separate and in this order. Do not merge `Audited Proofs` and `Findings by decision`: proofs establish evidence and gaps, false-positive gates attempt to defeat the candidate, and only then may a candidate appear under `Findings by decision` as `confirmed`, `potential`, `rejected`, or `inconclusive`.
+
+**Tier companion decisions** is a required block on every Standard or Deep report:
+
+```
+Tier companion decisions:
+- External grounding: confirmed EG-... | no external facts required | unresolved
+- Evidence-gated review: failed to reject C-... | no candidate disputed | unresolved
+- Semantic review: mapped critical path ... | n/a — tier is not Deep
+- Tier promotion: not required | promoted to Standard because <blast-radius category>
+```
+
+**Tier promotion probe** is a required block whenever a Triage finding is being evaluated for promotion. Do not infer mass exposure from a single reachable object — record the check explicitly:
+
+```
+Tier promotion probe:
+- Bulk / list path checked: yes — <finding or path> | no | n/a
+- Cross-tenant enumeration checked: yes — <finding or path> | no | n/a
+- Secrets / payment / admin / system impact checked: yes — <scope> | no | n/a
+- Promotion decision: stay Triage | promote Standard because <canonical category>
+```
 
 Each finding should include: property, affected code, attacker path, proof gap, gate results, severity, confidence, CWE/CVSS/ASVS/WSTG tags when relevant, repro/evidence, remediation direction, and regression/security test suggestion.
 
@@ -252,6 +274,18 @@ Decision
 | "I covered the main route." | Alternate entrypoints, background jobs, imports, deserializers, and migrations often bypass primary-path guards. Name uncovered risk if not checked. |
 
 ## Coordination with other skills
+
+When handing off, emit this standard block:
+
+```
+Handoff
+- From skill: quaere-audit
+- Blocking question: <what cannot be decided within this audit's scope>
+- Confirmed inputs: <confirmed findings, grounded external facts, or semantic invariants safe to carry forward>
+- Inconclusive inputs: <potential/inconclusive findings or ungrounded facts not safe to treat as true>
+- Required next skill: <quaere-grounding | quaere-semantic | quaere-evidence | quaere-execution>
+- Stop condition: <what the next skill must return before the audit can mark the finding confirmed>
+```
 
 - `quaere-semantic` — when code intent, invariants, failure modes, or downstream connections are unclear.
 - `quaere-grounding` — before relying on current specs, CVEs, advisories, docs, cloud behavior, framework guidance, CLI/tool behavior, or bounty rules.

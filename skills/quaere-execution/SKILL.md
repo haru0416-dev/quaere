@@ -101,7 +101,24 @@ If verification fails and the cause is unclear, switch to `quaere-evidence` with
 
 A unit is not complete when the edit is done. Study both evidence channels:
 
-1. **Targeted check:** run the unit's check when feasible. For bug fixes or behavior changes, prefer a check that would fail before and pass after. For test-only changes, confirm the test asserts behavior rather than implementation trivia.
+**Verification contract.** Record the check result with one of these labeled forms:
+
+```
+Before check:
+  FAIL: <command / result>        ← shows the defect existed before the fix
+  PASS baseline: <command>        ← baseline passing suite is still clean
+  N/A: <reason>                   ← if no before-state check was possible
+
+After check:
+  PASS: <command / result>
+  FAIL: <command / result and remaining issue>
+```
+
+Success claim is allowed only when: diff was reviewed, final verification is fresh, and unrelated or generated changes are either justified or reverted.
+
+**Generated files, lockfiles, snapshots, and build output** are allowed in the commit only when named in the Contract or required by the verification. If a tool modifies them as a side effect, either justify the inclusion or revert and re-stage without them.
+
+1. **Targeted check:** run the unit's check when feasible. Use the verification contract above. For test-only changes, confirm the test asserts behavior rather than implementation trivia.
 2. **Compare observed result to the unit's Prediction.** The Plan step recorded what should be true after this unit; the Study step is where that prediction is tested. If the observed result matches the prediction, the unit's mental model held. If it diverges in an *unexpected* way (the test passes for a different reason than predicted, or fails for a cause the prediction did not name), the divergence is information about the model — record it and either route to the Fix loop with a corrected prediction or hand off to `quaere-evidence` if the cause is unclear. PDSA's value is in this comparison, not in running the check; running without comparing reduces the loop to Plan-Do-Commit.
 3. **Diff review:** inspect the actual diff and ask:
    - Does every changed line map to the unit Reason or a dependency?
@@ -250,6 +267,18 @@ Commit
 | "No need to inspect the diff; I wrote it." | Self-generated diffs still drift. The final diff review is the check against accidental scope expansion. |
 
 ## Handoff to other skills
+
+When handing off, emit this standard block:
+
+```
+Handoff
+- From skill: quaere-execution
+- Blocking question: <what blocked implementation — unclear cause, ungrounded fact, or security risk>
+- Confirmed inputs: <units completed, tests passing, diffs reviewed — safe to treat as done>
+- Inconclusive inputs: <units deferred, skipped checks, or open risks — not safe to treat as complete>
+- Required next skill: <quaere-evidence | quaere-grounding | quaere-semantic | quaere-audit>
+- Stop condition: <what the next skill must return before implementation can resume>
+```
 
 Switch out when the blocker is no longer implementation:
 

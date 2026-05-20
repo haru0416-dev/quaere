@@ -14,7 +14,34 @@ SKILLS_DIR = ROOT / "skills"
 README = ROOT / "README.md"
 EXAMPLES = ROOT / "examples" / "README.md"
 SCENARIOS = ROOT / "evals" / "scenarios.json"
-MAX_SKILL_LINES = 500
+MAX_SKILL_LINES = 600
+
+# Required blocks that must appear in specific SKILL.md files.
+# Key: skill directory name. Value: list of (pattern, description) pairs.
+REQUIRED_BLOCKS: dict[str, list[tuple[str, str]]] = {
+    "quaere-evidence": [
+        ("## Output contract", "Output contract section"),
+        ("### Lightweight evidence pass", "Lightweight evidence pass subsection"),
+        ("## Handoff to other skills", "Handoff to other skills section"),
+    ],
+    "quaere-audit": [
+        ("Tier companion decisions:", "Tier companion decisions required block"),
+        ("Tier promotion probe:", "Tier promotion probe required block"),
+        ("## Coordination with other skills", "Coordination/Handoff section"),
+    ],
+    "quaere-semantic": [
+        ("## Meaningful unit selection", "Meaningful unit selection section"),
+        ("## Handoff to other skills", "Handoff to other skills section"),
+    ],
+    "quaere-grounding": [
+        ("## Claim result matrix", "Claim result matrix section"),
+        ("## Handoff to other skills", "Handoff to other skills section"),
+    ],
+    "quaere-execution": [
+        ("Verification contract", "Verification contract block"),
+        ("## Handoff to other skills", "Handoff to other skills section"),
+    ],
+}
 REQUIRED_FIELDS = {"name", "description", "compatibility", "license"}
 KEBAB_CASE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 YAML_QUOTED_SCALAR = re.compile(r"^(['\"]).*\1$")
@@ -115,6 +142,11 @@ def validate_skill(
 
     if skill_dir.name not in scenario_skills:
         fail(errors, f"evals/scenarios.json: missing scenario for {skill_dir.name}")
+
+    skill_text = skill_md.read_text(encoding="utf-8")
+    for pattern, description in REQUIRED_BLOCKS.get(skill_dir.name, []):
+        if pattern not in skill_text:
+            fail(errors, f"{skill_md}: missing required block: {description} (expected: {pattern!r})")
 
 
 def load_scenario_skills(path: Path, errors: list[str]) -> set[str]:
