@@ -181,6 +181,15 @@ class ValidatorParityTest(unittest.TestCase):
         broken = VALID_SKILL.rstrip("\n") + "\n" + ("padding\n" * 600)
         self._both_reject(broken, message="line budget exceeded")
 
+    def test_unquoted_colon_space_in_value_rejected_by_both(self) -> None:
+        # A frontmatter value containing ': ' must be quoted so that YAML-
+        # compatible skill loaders don't misparse it as a nested mapping.
+        broken = VALID_SKILL.replace(
+            "compatibility: claude-code",
+            "compatibility: claude-code: extra",
+        )
+        self._both_reject(broken, message="unquoted ': ' in frontmatter value")
+
 
 if __name__ == "__main__":
     unittest.main()
