@@ -1,13 +1,24 @@
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 
-/// Resolve the install target. Falls back to ~/.claude/skills/ when no override is given.
+/// Default install directory for the Claude Code agent.
+pub fn claude_default() -> Result<PathBuf> {
+    let home = dirs::home_dir().context("could not resolve $HOME")?;
+    Ok(home.join(".claude").join("skills"))
+}
+
+/// Default install directory for the Codex CLI agent.
+pub fn codex_default() -> Result<PathBuf> {
+    let home = dirs::home_dir().context("could not resolve $HOME")?;
+    Ok(home.join(".agents").join("skills"))
+}
+
+/// Resolve the install target. Falls back to the Claude default when no override is given.
 pub fn resolve_target(custom: Option<PathBuf>) -> Result<PathBuf> {
     if let Some(p) = custom {
         return Ok(p);
     }
-    let home = dirs::home_dir().context("could not resolve $HOME")?;
-    Ok(home.join(".claude").join("skills"))
+    claude_default()
 }
 
 /// Path to the Quaere manifest under a given install target.
