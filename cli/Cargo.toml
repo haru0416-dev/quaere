@@ -1,6 +1,6 @@
 [package]
 name = "quaere-cli"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 description = "Install and manage Quaere process-correction skills for coding agents."
 license = "MIT"
