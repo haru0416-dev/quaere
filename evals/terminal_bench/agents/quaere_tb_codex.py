@@ -61,18 +61,13 @@ def _shared_env() -> dict[str, str]:
 def _run_codex_command(task_description: str) -> "TerminalCommand":
     """Single Codex CLI invocation receiving the task on stdin.
 
-    Mirrors the `codex exec - < $prompt_file` pattern used by the in-tree
-    eval runner; we wrap the task in a heredoc so it survives shell-quoting
-    irrespective of the task's content.
+    Uses printf + shlex.quote so that arbitrary task content — including lines
+    that would close a heredoc — cannot escape into the enclosing shell.
     """
     from terminal_bench.agents.installed_agents.abstract_installed_agent import TerminalCommand
 
-    heredoc = (
-        "cat <<'__QUAERE_TASK_EOF__' | " f"{CODEX_BIN} exec -\n"
-        f"{task_description}\n"
-        "__QUAERE_TASK_EOF__\n"
-    )
-    return TerminalCommand(command=heredoc, max_timeout_sec=900)
+    command = f"printf '%s\\n' {shlex.quote(task_description)} | {CODEX_BIN} exec -"
+    return TerminalCommand(command=command, max_timeout_sec=900)
 
 
 def _import_abstract_installed_agent() -> type:
