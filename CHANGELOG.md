@@ -4,6 +4,67 @@ All notable changes to Quaere are documented in this file. The format follows [K
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-05-20
+
+Infrastructure release: lands the eval-harness graders and Terminal-Bench adapter that v0.3 will use to publish external-benchmark numbers, plus a Skill content pass addressing post-v0.2.0 review feedback. Treated as a PATCH bump because the Skill changes are additive structural improvements — no Iron Laws changed, no existing gates weakened.
+
+### Added
+
+#### Eval harness graders (ADR-0008)
+
+- `behavior` assertion type — per-run resource thresholds against runtime metadata (`max_tool_calls` / `min_tool_calls` / `max_duration_seconds` / `max_tokens_output` / `max_tokens_input`). Records `status: "manual"` when the runner has not emitted the relevant metric, so adoption can land before runner-side metadata extraction does.
+- `llm_judge` assertion type — LLM grades output against a free-form `rubric`. Default-off via `--enable-llm-judge` (per-PR CI cost stays at zero). Three transport backends share the same grading contract:
+  - `anthropic` (default): Anthropic SDK + `ANTHROPIC_API_KEY`.
+  - `openai-compat`: openai SDK + `--llm-judge-base-url` (or `$QUAERE_LLM_JUDGE_BASE_URL`) for Ollama, vLLM, LM Studio, LocalAI, LiteLLM, etc. Enables fully local eval flows.
+  - `codex`: shells out to `codex exec --output-last-message`, reusing Codex CLI's existing auth and endpoint. No extra Python SDK required.
+- Responses cached at `evals/.llm_judge_cache/<sha>.json` keyed by `sha256(backend:model + rubric + output)`. The backend prefix in the key prevents cross-backend cache hits.
+- Sample assertions added to `evals/scenarios.json` for both new types (two `behavior`, one `llm_judge`) so the schema is exercised end-to-end.
+
+#### Terminal-Bench adapter (ADR-0007)
+
+- `evals/terminal_bench/` package with two `AbstractInstalledAgent` subclasses:
+  - `quaere-tb-codex-baseline` — Codex CLI only.
+  - `quaere-tb-codex-with-skill` — Codex CLI + `quaere install`.
+
+  Both share env, model selection, and command shape; the only difference is whether `~/.claude/skills/quaere-*` is present inside the per-task container. Lazy-imports the optional `terminal-bench` dependency so the package can be inspected without it installed.
+- `evals/terminal_bench/install_scripts/install-baseline.sh` and `install-with-skill.sh` — pin Codex CLI to `0.128.0` by default; the baseline script refuses to run when `~/.claude/skills/quaere-*` exists (treats a leaked treatment as a void run); the with-skill script verifies the five expected skills landed before exiting.
+- `.github/workflows/eval-terminal-bench.yml` — manual-trigger (`workflow_dispatch`) workflow that runs `tb run` against the registered agents. Inputs choose `agent` (baseline / with-skill / both), `scope` (smoke / full / task_id), and `codex_version`. 4h timeout cap. Never PR-triggered.
+
+#### Skill content improvements (review feedback)
+
+- **quaere-evidence**: Added `## Output contract` section (冒頭契約) with the 8 required output sections in canonical order, plus a `### Lightweight evidence pass` template — same gate run with fewer words for small-scope investigations.
+- **quaere-audit**: Added `Tier companion decisions` and `Tier promotion probe` as required output blocks in every Standard/Deep report. These make explicit which companion skills were invoked and whether bulk/cross-tenant exposure was checked before tier promotion.
+- **quaere-semantic**: Added `## Meaningful unit selection` section — 6 criteria for which units to analyze in depth; pure local helpers not meeting any criterion can be collapsed into their caller.
+- **quaere-grounding**: Added `## Claim result matrix` table and `locally observed` as a new decision label between "confirmed" and "inconclusive". Clarified that sources derived from the same dependency graph (package.json + lockfile + installed types) are not independent corroborators.
+- **quaere-execution**: Added `Verification contract` block with labeled `Before check / After check` forms. Clarified that generated files, lockfiles, snapshots, and build output require justification or must be reverted.
+- **All 5 skills**: Standardized the `## Handoff to other skills` section with a common 6-field block template (`From skill` / `Blocking question` / `Confirmed inputs` / `Inconclusive inputs` / `Required next skill` / `Stop condition`).
+- **evals**: Added 4 adversarial scenarios to `scenarios.json` — urgency pressure (`pressure-to-skip-evidence-gate`), baseless assertion (`baseless-security-assertion`), skip-test pressure (`skip-tests-pressure`), and docs blind-trust (`blind-trust-external-docs`) — each asserting that the relevant skill's Iron Law gate holds under pressure.
+- **validator**: `scripts/validate_skills.py` checks for required structural blocks per skill (Output contract, Lightweight evidence pass, Tier companion decisions, Tier promotion probe, Meaningful unit selection, Claim result matrix, Verification contract). Line budget raised from 500 to 600 to accommodate the additions.
+
+#### Validation + docs
+
+- `scripts/validate_skills.py` accepts the two new assertion types in its allowlist.
+- `README.md` / `README.ja.md` gain the new grader rows in the assertion-type table, three subsections covering all `llm_judge` backends, and a `Roadmap` upgrade for Terminal-Bench from "v0.3 target" to "v0.3 in progress" with a pointer to the new adapter.
+- `tests/test_run_skill_evals.py` covers the new graders end-to-end (6 behavior tests, 11 llm_judge tests including codex backend dispatch and a backend-specific cache-key regression).
+- `tests/test_terminal_bench_adapter.py` covers the package's lazy-import discipline and missing-dependency error path.
+
+### Measured effect
+
+Single-run via Codex CLI against 18 scenarios / 97 deterministic assertions (14 original + 4 new adversarial):
+
+| mode                | assertion pass rate | scenario-level |
+| ------------------- | ------------------: | -------------: |
+| Baseline (no skill) | 60% (58 / 97)       | 0 / 18 pass    |
+| **With skill**      | **87% (84 / 97)**   | **8 pass · 4 inconclusive · 6 fail** |
+| Δ                   | **+27 pp**          |                |
+
+4 inconclusive runs have zero failed assertions; they contain `not_in_baseline` assertions that require a paired baseline run to resolve. 4 with-skill timeouts account for most failures (complex multi-step skill prompts). The 4 adversarial scenarios score 92% with-skill vs ~46% baseline.
+
+### Known limitations (deferred to v0.3.x)
+
+- `behavior` assertions in the in-tree eval all resolve to `status: "manual"` because the Codex CLI runner does not yet parse out `tool_calls` / `tokens_*` metadata. The grader is ready; the runner-side metric extraction lands separately.
+- Terminal-Bench smoke / full sweep / leaderboard runs have not executed; the adapter is wired but the numbers are pending.
+
 ## [0.2.0] — 2026-05-20
 
 Eval-driven quality pass on the v0.1.0 skill set and harness. The 9 with-skill residual failures from the v0.1.0 evaluation are addressed across two work streams without adding new skills.
@@ -134,6 +195,7 @@ rm -rf ~/.claude/skills/{semantic-review,external-grounding,evidence-gated-revie
 curl -fsSL https://raw.githubusercontent.com/haru0416-dev/quaere/main/scripts/install.sh | sh
 ```
 
-[Unreleased]: https://github.com/haru0416-dev/quaere/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/haru0416-dev/quaere/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/haru0416-dev/quaere/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/haru0416-dev/quaere/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/haru0416-dev/quaere/releases/tag/v0.1.0
