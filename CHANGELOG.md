@@ -4,6 +4,19 @@ All notable changes to Quaere are documented in this file. The format follows [K
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-05-21
+
+Patch release: rebuild the Linux release binaries against musl libc so they no longer require a specific GLIBC version. v0.3.0's `x86_64-unknown-linux-gnu` artifact was built against GLIBC 2.39 (Ubuntu 24.04 builder) and refused to run on Debian Bookworm (2.36), Ubuntu 22.04 (2.35), and older. The musl static binaries are GLIBC-independent and run unchanged on Alpine through RHEL 7 class systems.
+
+### Changed
+
+- Linux release artifacts are now `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl`. The host-facing tarball name pattern changes accordingly (`quaere-vX.Y.Z-<target>.tar.gz`). The curl one-liner picks the right artifact via `uname -m` and continues to work transparently.
+- `release.yml` switches the linux x86_64 builder to native ubuntu-latest with `musl-tools` and the linux aarch64 builder to `cross` (via `taiki-e/install-action`) so that ring's C bits cross-compile with a musl-aware toolchain.
+
+### Fixed
+
+- `evals/terminal_bench/README.md`'s `tb run` smoke examples used flags that no longer exist in the current terminal-bench CLI (`--task`, `--output-dir`, `TB_AGENT_REGISTRY`). Replaced with the canonical form (`--agent-import-path`, `--task-id`, `--output-path`, `--dataset 'terminal-bench-core==0.1.1'`) that the v0.3.0-era smoke run actually used.
+
 ## [0.3.0] — 2026-05-20
 
 Minor release: introduces an agent-aware install pipeline (`quaere install claude / codex / all`) so the same CLI deploys to both Claude Code (`~/.claude/skills/`) and Codex CLI (`~/.agents/skills/`). The curl one-liner now ends with an explicit `quaere install all` step and a `Commands:` block, and `quaere install --force` swaps skills atomically so a mid-extract failure no longer leaves dest half-written.
