@@ -36,6 +36,43 @@ if TYPE_CHECKING:  # pragma: no cover — terminal-bench is an optional dependen
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "install_scripts"
 CODEX_BIN = "codex"
 
+# Files inside the host's $CODEX_HOME that the install script will consume to
+# restore an existing OAuth session inside the per-task container. Sanctioned
+# by openai/codex docs (developers.openai.com/codex/auth: "Copy into a Docker
+# container: docker cp ~/.codex/auth.json ..."). We mirror that flow through
+# terminal-bench's session.copy_to_container so the container can pick up
+# whichever auth backend the host already established (ChatGPT OAuth or API
+# key in auth.json).
+_HOST_CODEX_STATE_FILES = ("auth.json", "config.toml")
+
+
+def _host_codex_dir() -> Path:
+    """Resolve the host's CODEX_HOME, honoring the env var override."""
+    override = os.environ.get("CODEX_HOME")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".codex"
+
+
+def _copy_host_codex_state(session) -> None:
+    """Forward host Codex auth/config files into /installed-agent/.
+
+    The install script reads `/installed-agent/auth.json` (and config.toml if
+    present) and installs them at `$HOME/.codex/` with mode 0600 before invoking
+    `codex` for the first time. Silently skips files that do not exist on the
+    host so OPENAI_API_KEY / env-only flows keep working unchanged.
+    """
+    host_dir = _host_codex_dir()
+    for name in _HOST_CODEX_STATE_FILES:
+        path = host_dir / name
+        if not path.is_file():
+            continue
+        session.copy_to_container(
+            path,
+            container_dir="/installed-agent",
+            container_filename=name,
+        )
+
 
 def _shared_env() -> dict[str, str]:
     """Environment shared between baseline and with-skill agent runs.
@@ -111,6 +148,14 @@ def build_agent_classes() -> tuple[type, type]:
         def _run_agent_commands(self, task_description: str) -> list:
             return [_run_codex_command(task_description)]
 
+        def perform_task(self, instruction, session, logging_dir=None):
+            # Forward host Codex auth state before super() copies the install
+            # script and runs it. copy_to_container does `mkdir -p` for the
+            # target dir, so running this first does not race with the super's
+            # own copy of install-agent.sh.
+            _copy_host_codex_state(session)
+            return super().perform_task(instruction, session, logging_dir)
+
     class QuaereTbCodexWithSkill(AbstractInstalledAgent):
         """Codex CLI plus the Quaere skill set extracted into ~/.claude/skills/."""
 
@@ -125,13 +170,17 @@ def build_agent_classes() -> tuple[type, type]:
         @property
         def _env(self) -> dict[str, str]:
             # Treatment difference vs baseline lives in the install script
-            # (which runs `quaere install`), not in the env vars. Env stays
-            # identical so any pass-rate Δ between the two agents is
+            # (which runs `quaere install all`), not in the env vars. Env
+            # stays identical so any pass-rate Δ between the two agents is
             # attributable to the skills being on disk.
             return _shared_env()
 
         def _run_agent_commands(self, task_description: str) -> list:
             return [_run_codex_command(task_description)]
+
+        def perform_task(self, instruction, session, logging_dir=None):
+            _copy_host_codex_state(session)
+            return super().perform_task(instruction, session, logging_dir)
 
     return QuaereTbCodexBaseline, QuaereTbCodexWithSkill
 

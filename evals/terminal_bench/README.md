@@ -27,13 +27,45 @@ evals/terminal_bench/
 ## Prerequisites
 
 - Docker (Terminal-Bench provisions per-task Debian containers).
-- Python 3.11+ and `pip install terminal-bench` on the host.
-- `OPENAI_API_KEY` in the environment (the Codex CLI reads it from there).
-  Optional: `CODEX_MODEL` to pin a model.
+- Python 3.11+ and `pip install terminal-bench` (or `uv tool install`) on the host.
+- One of the following Codex CLI auth setups:
+  - `OPENAI_API_KEY` in the environment (API key path; works everywhere
+    including CI). Optional: `CODEX_MODEL` to pin a model.
+  - A `codex login` session on the host (ChatGPT OAuth path); see
+    *ChatGPT OAuth path* below.
 
 The adapter package itself imports without `terminal-bench` installed —
 helpful for CI and IDEs — but actually running a sweep requires the
 dependency.
+
+### ChatGPT OAuth path (local execution)
+
+If the host already has `codex login` done (ChatGPT subscription), the
+adapter forwards the host's `~/.codex/auth.json` (and `config.toml` if
+present) into each per-task container via
+`session.copy_to_container`, and the install script restores them at
+`$HOME/.codex/` with mode 0600 before the first `codex exec` call.
+This mirrors the vendor-sanctioned flow documented at
+<https://developers.openai.com/codex/auth> (`docker cp ~/.codex/auth.json
+MY_CONTAINER:"$CONTAINER_HOME/.codex/auth.json"`).
+
+Honored env var override: `CODEX_HOME` on the host points the adapter at
+a non-default auth directory.
+
+**Caveats for the OAuth path:**
+
+- Token refresh is automatic inside the container, but if you run
+  `codex logout` on the host during a sweep, every running container's
+  session is invalidated.
+- Do not run parallel sweeps from the same host: concurrent token
+  refresh on the same OAuth session is race-prone.
+- A container that runs a Terminal-Bench task can read the forwarded
+  token. This is acceptable when the task suite is vendor-curated
+  (terminal-bench-core), but treat it as a privileged credential: do not
+  point the adapter at untrusted custom task definitions.
+- CI workflows (`.github/workflows/eval-terminal-bench.yml`) cannot use
+  this path — the GitHub runner has no host auth state. Use
+  `OPENAI_API_KEY` in CI.
 
 ## Running locally
 
