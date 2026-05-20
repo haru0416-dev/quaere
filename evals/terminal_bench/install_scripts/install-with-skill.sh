@@ -47,9 +47,12 @@ export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
 quaere version
 
-# 4. Extract the skill set so Codex CLI sees ~/.claude/skills/quaere-*.
+# 4. Extract the skill set into both ~/.claude/skills/ and ~/.agents/skills/.
+#    `quaere install all` is the canonical curl-one-liner path since v0.3.0:
+#    populating both targets keeps the treatment robust regardless of which
+#    directory Codex CLI ends up scanning.
 mkdir -p "$HOME/.claude/skills"
-quaere install
+quaere install all
 
 # 5. Verify the treatment is actually applied. A silent miss here would
 #    void the measurement.
