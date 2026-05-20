@@ -102,7 +102,7 @@ actual=$($SHA256_CMD "$tmp/$archive" | awk '{print $1}')
 log "checksum OK"
 
 log "extracting"
-tar -xzf "$tmp/$archive" -C "$tmp"
+tar -xzf "$tmp/$archive" -C "$tmp" --strip-components=1
 [ -f "$tmp/quaere" ] || fail "archive did not contain a quaere binary"
 chmod +x "$tmp/quaere"
 
