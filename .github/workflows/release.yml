@@ -214,13 +214,35 @@ jobs:
           text, n_ver = re.subn(r'version "[^"]+"', f'version "{os.environ["V"]}"', text, count=1)
           if n_ver != 1:
               sys.exit("could not locate `version` line in Formula/quaere.rb")
-          shas = [os.environ[k] for k in ("ARM_MAC", "INTEL_MAC", "ARM_LINUX", "INTEL_LINUX")]
-          if not all(shas):
-              sys.exit(f"missing one or more SHA values: {shas}")
-          _it = iter(shas)
-          text, n_sha = re.subn(r'sha256 "[0-9a-f]+"', lambda _m: f'sha256 "{next(_it)}"', text, count=4)
-          if n_sha != 4:
-              sys.exit(f"expected 4 sha256 lines, rewrote {n_sha}")
+          # SHA rewrite is anchored on the URL line so the substitution is
+          # arch-aware, not positional: even if the on_macos/on_linux blocks
+          # were reordered or a new arch were added, each sha256 line stays
+          # paired with its matching artifact URL. The previous positional
+          # iter() approach would have silently mismatched SHAs to URLs in
+          # those cases. See audit finding F-003.
+          sha_by_target = {
+              "aarch64-apple-darwin":        os.environ["ARM_MAC"],
+              "x86_64-apple-darwin":         os.environ["INTEL_MAC"],
+              "aarch64-unknown-linux-musl":  os.environ["ARM_LINUX"],
+              "x86_64-unknown-linux-musl":   os.environ["INTEL_LINUX"],
+          }
+          if not all(sha_by_target.values()):
+              sys.exit(f"missing one or more SHA values: {sha_by_target}")
+          targets_alt = "|".join(re.escape(t) for t in sha_by_target)
+          pair_re = re.compile(
+              rf'(url "[^"]*-(?P<target>{targets_alt})[^"]*"\s*\n\s*sha256 ")[0-9a-f]+(")'
+          )
+          seen = set()
+          def _replace(m):
+              target = m.group("target")
+              seen.add(target)
+              return m.group(1) + sha_by_target[target] + m.group(3)
+          text, n_sha = pair_re.subn(_replace, text)
+          if n_sha != 4 or seen != set(sha_by_target):
+              sys.exit(
+                  f"expected 4 url+sha256 pairs covering {sorted(sha_by_target)}; "
+                  f"rewrote {n_sha}, matched targets {sorted(seen)}"
+              )
           p.write_text(text)
           PY
           git --no-pager diff Formula/quaere.rb
