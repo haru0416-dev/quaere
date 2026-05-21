@@ -39,7 +39,7 @@ require_cmd rm
 # binding to the release workflow's OIDC identity is the only thing the
 # installer can rely on if github.com Releases write access is compromised.
 # Install cosign: `brew install cosign`, `apt install cosign` (Debian 13+),
-# or follow https://docs.sigstore.dev/system_config/installation.
+# or follow https://docs.sigstore.dev/cosign/system_config/installation/.
 require_cmd cosign
 
 # Detect a sha256 tool. macOS ships `shasum -a 256`; Linux ships `sha256sum`.

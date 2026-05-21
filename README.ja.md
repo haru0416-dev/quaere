@@ -105,7 +105,7 @@ curl -fsSL https://quaere.dev/install.sh | sh
 
 取得、`SHA256SUMS` の cosign keyless OIDC 署名検証 (リリースワークフローの identity に bind 済み)、署名済み `SHA256SUMS` を使った tar.gz のチェックサム検証、`$HOME/.local/bin/quaere` への配置、`quaere install all` によるスキル展開、利用可能コマンドの表示までを一括で行う。
 
-**前提: `cosign`** — `brew install cosign`、`apt install cosign` (Debian 13+ / Ubuntu 24.04+)、または <https://docs.sigstore.dev/system_config/installation> を参照。v0.3.2 以降の release は必須。それ以前のタグを使うなら `cargo install quaere-cli --version <X.Y.Z>` を選ぶ。
+**前提: `cosign`** — `brew install cosign`、`apt install cosign` (Debian 13+ / Ubuntu 24.04+)、または <https://docs.sigstore.dev/cosign/system_config/installation/> を参照。v0.3.2 以降の release は必須。それ以前のタグを使うなら `cargo install quaere-cli --version <X.Y.Z>` を選ぶ。
 
 環境変数で上書きできる項目: `QUAERE_VERSION` (タグ固定)、`QUAERE_REPO` (fork から取得)、`QUAERE_INSTALL_DIR` (バイナリの配置先)、`QUAERE_SKILLS=0` (スキル展開のスキップ)。
 
