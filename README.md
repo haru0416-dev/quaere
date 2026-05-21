@@ -1,16 +1,27 @@
 # Quaere
 
-> Process-correction skills that make coding agents ask before they act.
+> Stop coding agents from confidently doing the wrong thing.
 
 [![CI](https://github.com/haru0416-dev/quaere/actions/workflows/ci.yml/badge.svg)](https://github.com/haru0416-dev/quaere/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/haru0416-dev/quaere?label=release&color=6b3fa0)](https://github.com/haru0416-dev/quaere/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+Coding agents rarely fail by saying "I do not know." They fail by sounding finished too early: they skim code, accept plausible claims, patch a wide diff, and report success before the cause is proven.
+
+Quaere is five skills for Claude Code, Codex, and other skill-aware coding agents. Each skill adds a gate at one of those failure points: read the code semantically, ground external facts, prove claims, execute changes in small verified steps, and audit security properties before publishing findings.
+
+```text
+Without Quaere: plausible claim -> broad patch -> partial test -> confident summary
+With Quaere:    claim -> evidence -> disconfirming probe -> scoped patch -> verified diff
+```
+
+In the current in-tree eval sweep, the same scenarios scored **53%** assertion pass rate without the skills and **91%** with them. The eval is not a substitute for external benchmarks; it is a concrete regression harness for the failure modes Quaere is designed to catch.
+
 ```bash
 curl -fsSL https://quaere.dev/install.sh | sh
 ```
 
-[Why Quaere](#why-quaere) · [Skills](#skills) · [Picking a skill](#picking-a-skill) · [Installation](#installation) · [Verifying](#verifying-the-install) · [quaere.dev](https://quaere.dev/) · [日本語](README.ja.md)
+[Why Quaere](#why-quaere) · [Measured effect](#measured-effect) · [Skills](#skills) · [Picking a skill](#picking-a-skill) · [Installation](#installation) · [Docs](#docs) · [quaere.dev](https://quaere.dev/) · [日本語](README.ja.md)
 
 ## Why Quaere
 
@@ -21,31 +32,21 @@ Coding agents drift at four predictable points:
 - they edit in unreviewed blobs,
 - they commit without authorization.
 
-Quaere is five skills that slow the agent down at each of those points. They do not add ceremony; they force one move: **state a claim, defend it with evidence, only then act.**
+Quaere slows the agent down at those points. It does not try to make agents more verbose or more cautious everywhere; it forces one move where drift is expensive: **state a claim, defend it with evidence, only then act.**
 
 The name comes from Latin *quaere* — "ask", "seek", "interrogate". Every skill in this collection enforces the same gate.
 
 ### Measured effect
 
-**v0.2.1** was the last sweep that measured the skills directly. v0.3.0 only changes the CLI and the install pipeline; the skill bodies are untouched, so these numbers still represent the current effect of the skills.
+The current headline comes from the v0.3.1 in-tree eval sweep. v0.3.0 / v0.3.1 changed the CLI and install pipeline, not the skill bodies, so the result describes the shipped skills:
 
-**v0.2.1** — 18 scenarios / 97 deterministic assertions (14 original + 4 new adversarial), single-run via Codex CLI:
+| mode                | assertion pass rate | scenario-level     |
+| ------------------- | ------------------: | -----------------: |
+| Baseline (no skill) | 53% (56 / 106)      | 0 / 18 pass        |
+| **With skill**      | **91% (96 / 106)**  | **10 / 18 pass**   |
+| Δ                   | **+37.7 pp**        | **+10 scenarios**  |
 
-| mode                | assertion pass rate | scenario-level                       |
-| ------------------- | ------------------: | -----------------------------------: |
-| Baseline (no skill) | 60% (58 / 97)       | 0 / 18 pass                          |
-| **With skill**      | **87% (84 / 97)**   | **8 pass · 4 inconclusive · 6 fail** |
-| Δ                   | **+27 pp**          |                                      |
-
-The 4 inconclusive scenarios have zero failed assertions; they contain `not_in_baseline` assertions that require a baseline run to resolve. 4 timeouts in the with-skill sweep (complex skill prompts × multi-step scenarios) account for most remaining failures.
-
-The 4 new adversarial scenarios (urgency pressure, skip-test pressure, docs blind-trust, baseless security assertion) score 92% with-skill vs ~46% baseline — the largest skill-vs-baseline gap in the suite.
-
-v0.2.0 (two-sweep range): with-skill **91.1 – 94.4%**, Δ **+27 to +29 pp**. Run-to-run variance is real for stochastic LLM output; numbers should be read as a range, not a point estimate. Per-version detail lives in [`CHANGELOG.md`](CHANGELOG.md).
-
-Cross-runner stability was confirmed during the v0.1.0 measurement: the same `sdk-version-grounding` scenario hit identical 6P/0F with-skill scores on Claude Code 2.1.141 and Codex CLI 0.128.0.
-
-The eval harness is documented at [`evals/README.md`](evals/README.md).
+The eval is a regression harness for Quaere's own failure modes, not a third-party benchmark. A separate Terminal-Bench sweep (80 tasks, `terminal-bench-core==0.1.1`) went the other way (baseline 56.25% → with-skill 38.75%); root-cause analysis is in [`docs/evaluation.md`](docs/evaluation.md). Variance notes and roadmap benchmarks live there too.
 
 ## Skills
 
@@ -149,16 +150,7 @@ quaere version   # print the CLI version
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the per-version change history; the `Unreleased` section is the next-up shipping list.
 
-### CLI behavior contracts
-
-The CLI follows these contracts (the Python validator `scripts/validate_skills.py` and the Rust `quaere doctor` are pinned to agree by `tests/test_validator_parity.py`, exercised in the CI `parity` job):
-
-- **`quaere install` is additive.** Running `quaere install --skill quaere-semantic` and then `quaere install --skill quaere-audit` against the same `--target` accumulates both skills into the manifest. The manifest stays consistent with the union of (previously installed skills that still exist on disk) + (skills installed this run) + (skills already present and skipped). The manifest entries are sorted for deterministic diffs.
-- **`quaere install --force` is atomic per skill.** The new content is staged at `<target>/.<name>.staging`, the previous dest is renamed to `<target>/.<name>.backup`, staging is renamed into place, and only then is the backup removed. A mid-extract I/O failure leaves dest at the previous complete content; crash residue (`.staging` / `.backup`) is silently skipped by `quaere doctor` and reclaimed on the next install.
-- **Unknown `--skill` names are rejected early.** A typo like `--skill quaere-semantik` aborts with the list of available skills *before* anything is written. There is no partial-install fallback.
-- **`quaere doctor` orphan policy.** A directory in the install target that is not recorded in the manifest is surfaced as an orphan. Orphans whose name starts with `quaere-` are treated as errors (a misbehaving Quaere install). Orphans with any other name are informational only — the install target may be shared with other skill management tools.
-- **`quaere update` uses semantic version comparison** for the standard `X.Y.Z` form, falling back to string comparison when either side is not parseable as semver. The command never modifies the binary; it only prints upgrade instructions.
-- **Default `--repo` is `haru0416-dev/quaere`.** If you are tracking a fork, override it: `quaere update --repo your-fork/quaere`. The same applies to `scripts/install.sh` via the `QUAERE_REPO` environment variable.
+The CLI behavior contracts are documented in [`docs/cli-contracts.md`](docs/cli-contracts.md).
 
 ## Examples
 
@@ -180,7 +172,7 @@ Quick examples:
 
 ## Evaluation
 
-The in-tree harness lives at `evals/`. It is fast, mostly deterministic, and a good fit for per-PR checks. The headline numbers in [Measured effect](#measured-effect) come from running it through Codex CLI; the same scenarios also run on Claude Code with comparable results.
+The in-tree harness lives at `evals/`. It is fast, mostly deterministic, and a good fit for per-PR checks. The headline numbers in [Measured effect](#measured-effect) come from running it through Codex CLI.
 
 Run a single scenario:
 
