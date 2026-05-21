@@ -6,9 +6,12 @@ use std::process::Command;
 #[derive(ClapArgs)]
 pub struct Args {
     /// Path to the Quaere repository root (containing evals/run_skill_evals.py).
-    /// Defaults to walking up from CWD, then $QUAERE_REPO.
+    /// Required: either `--repo` or `$QUAERE_REPO`. Walking up from CWD is no
+    /// longer supported; it allowed `quaere eval` to execute an arbitrary
+    /// `evals/run_skill_evals.py` planted in a parent of the current shell
+    /// (audit finding F-002, CWE-426).
     #[arg(long, env = "QUAERE_REPO")]
-    repo: Option<PathBuf>,
+    repo: PathBuf,
 
     /// Python interpreter to use. Defaults to $QUAERE_PYTHON or `python3`.
     #[arg(long, env = "QUAERE_PYTHON", default_value = "python3")]
@@ -20,8 +23,7 @@ pub struct Args {
 }
 
 pub fn run(args: Args) -> Result<()> {
-    let repo = resolve_repo(args.repo)?;
-    let runner = repo.join("evals").join("run_skill_evals.py");
+    let runner = args.repo.join("evals").join("run_skill_evals.py");
     if !runner.is_file() {
         anyhow::bail!(
             "expected {} to exist; pass --repo or set QUAERE_REPO to your Quaere checkout",
@@ -32,7 +34,7 @@ pub fn run(args: Args) -> Result<()> {
     let status = Command::new(&args.python)
         .arg(&runner)
         .args(&args.runner_args)
-        .current_dir(&repo)
+        .current_dir(&args.repo)
         .status()
         .with_context(|| format!("spawning `{} {}`", args.python, runner.display()))?;
 
@@ -43,23 +45,4 @@ pub fn run(args: Args) -> Result<()> {
         anyhow::bail!("run_skill_evals.py terminated by signal");
     }
     Ok(())
-}
-
-fn resolve_repo(custom: Option<PathBuf>) -> Result<PathBuf> {
-    if let Some(p) = custom {
-        return Ok(p);
-    }
-    let mut dir = std::env::current_dir().context("reading current directory")?;
-    loop {
-        if dir.join("evals").join("run_skill_evals.py").is_file() {
-            return Ok(dir);
-        }
-        if !dir.pop() {
-            break;
-        }
-    }
-    anyhow::bail!(
-        "could not find evals/run_skill_evals.py walking up from CWD; \
-         pass --repo or set QUAERE_REPO to your Quaere checkout"
-    );
 }
