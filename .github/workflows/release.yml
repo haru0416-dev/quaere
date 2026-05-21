@@ -131,6 +131,11 @@ jobs:
     name: publish release
     needs: [build, skills]
     runs-on: ubuntu-latest
+    # id-token: write enables cosign keyless (OIDC) signing below. Scoped to
+    # this job, not granted repo-wide.
+    permissions:
+      contents: write
+      id-token: write
     steps:
       - uses: actions/checkout@v6
 
@@ -149,6 +154,24 @@ jobs:
           ls -la
           cat SHA256SUMS
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign SHA256SUMS (cosign keyless OIDC)
+        working-directory: release
+        run: |
+          set -euo pipefail
+          # Keyless signing binds the signature to this exact workflow ref
+          # (refs/tags/vX.Y.Z) via Sigstore's transparency log. install.sh
+          # verifies the cert identity, so an attacker who steals the
+          # release artifact write path cannot forge a matching signature
+          # without also running this workflow at this tag.
+          cosign sign-blob --yes \
+            --output-signature SHA256SUMS.sig \
+            --output-certificate SHA256SUMS.pem \
+            SHA256SUMS
+          ls -la SHA256SUMS*
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -158,7 +181,7 @@ jobs:
           tag="$RELEASE_TAG"
           [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][A-Za-z0-9_.-]+)?$ ]] || { echo "invalid release tag: $tag" >&2; exit 2; }
           gh release create "$tag" \
-            release/*.tar.gz release/SHA256SUMS \
+            release/*.tar.gz release/SHA256SUMS release/SHA256SUMS.sig release/SHA256SUMS.pem \
             --title "$tag" \
             --generate-notes \
             --repo "$GITHUB_REPOSITORY"

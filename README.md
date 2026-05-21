@@ -106,7 +106,9 @@ If two skills seem plausible, choose the one that answers the blocking question 
 curl -fsSL https://quaere.dev/install.sh | sh
 ```
 
-Downloads the `quaere` binary, verifies its checksum, places it in `$HOME/.local/bin/quaere`, runs `quaere install all` to deploy skills to both Claude Code and Codex, and prints the available slash commands.
+Downloads the `quaere` binary, verifies that `SHA256SUMS` was signed by the release workflow itself (cosign keyless OIDC, identity-bound), verifies the archive checksum against the signed `SHA256SUMS`, places the binary in `$HOME/.local/bin/quaere`, runs `quaere install all` to deploy skills to both Claude Code and Codex, and prints the available slash commands.
+
+**Prerequisite: `cosign`** — install via `brew install cosign`, `apt install cosign` (Debian 13+ / Ubuntu 24.04+), or follow <https://docs.sigstore.dev/system_config/installation>. Releases starting with v0.3.2 require it; for older tags, use `cargo install quaere-cli --version <X.Y.Z>` instead.
 
 Environment overrides: `QUAERE_VERSION` to pin a tag, `QUAERE_REPO` to install from a fork, `QUAERE_INSTALL_DIR` to relocate the binary, `QUAERE_SKILLS=0` to skip skill deployment.
 

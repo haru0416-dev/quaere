@@ -33,6 +33,14 @@ require_cmd uname
 require_cmd mkdir
 require_cmd mv
 require_cmd rm
+# cosign is required to verify the Sigstore keyless signature on SHA256SUMS.
+# A hard requirement (rather than optional) prevents a downgrade attack
+# where an attacker replaces both the archive and SHA256SUMS — the signature
+# binding to the release workflow's OIDC identity is the only thing the
+# installer can rely on if github.com Releases write access is compromised.
+# Install cosign: `brew install cosign`, `apt install cosign` (Debian 13+),
+# or follow https://docs.sigstore.dev/system_config/installation.
+require_cmd cosign
 
 # Detect a sha256 tool. macOS ships `shasum -a 256`; Linux ships `sha256sum`.
 if command -v sha256sum >/dev/null 2>&1; then
@@ -42,6 +50,13 @@ elif command -v shasum >/dev/null 2>&1; then
 else
     fail "need sha256sum or shasum to verify the release archive"
 fi
+
+# Pin the Sigstore identity for SHA256SUMS verification. The cert in
+# SHA256SUMS.pem must show that it was issued to this workflow at this tag
+# (refs/tags/vX.Y.Z), via GitHub Actions' OIDC. Any other identity — a
+# different repo, a different workflow, a different ref — is rejected.
+COSIGN_IDENTITY_REGEX='^https://github\.com/'"$(printf '%s' "$QUAERE_REPO" | sed 's/[]\/$*.^[]/\\&/g')"'/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+([-+][A-Za-z0-9_.-]+)?$'
+COSIGN_OIDC_ISSUER='https://token.actions.githubusercontent.com'
 
 # Detect platform.
 os_kind=$(uname -s)
@@ -108,7 +123,29 @@ log "downloading SHA256SUMS"
 curl -fsSL --retry 3 -o "$tmp/SHA256SUMS" "$sums_url" \
     || fail "could not download $sums_url"
 
-log "verifying checksum"
+log "downloading SHA256SUMS.sig + SHA256SUMS.pem (cosign keyless)"
+if ! curl -fsSL --retry 3 -o "$tmp/SHA256SUMS.sig" "${base}/SHA256SUMS.sig"; then
+    fail "could not download ${base}/SHA256SUMS.sig.
+Quaere releases starting with v0.3.2 are signed with cosign keyless OIDC.
+For older tags, install via cargo instead:
+  cargo install quaere-cli --version ${tag#v}
+or pin to a signed release:
+  QUAERE_VERSION=<v0.3.2-or-newer> curl -fsSL https://quaere.dev/install.sh | sh"
+fi
+curl -fsSL --retry 3 -o "$tmp/SHA256SUMS.pem" "${base}/SHA256SUMS.pem" \
+    || fail "could not download ${base}/SHA256SUMS.pem"
+
+log "verifying SHA256SUMS signature against release workflow identity"
+cosign verify-blob \
+    --certificate "$tmp/SHA256SUMS.pem" \
+    --signature "$tmp/SHA256SUMS.sig" \
+    --certificate-identity-regexp "$COSIGN_IDENTITY_REGEX" \
+    --certificate-oidc-issuer "$COSIGN_OIDC_ISSUER" \
+    "$tmp/SHA256SUMS" >/dev/null 2>&1 \
+    || fail "cosign signature verification failed for SHA256SUMS; refusing to install"
+log "signature OK (issued to $QUAERE_REPO release workflow)"
+
+log "verifying archive checksum"
 expected=$(grep " $archive\$" "$tmp/SHA256SUMS" | awk '{print $1}')
 [ -n "$expected" ] || fail "SHA256SUMS has no entry for $archive"
 actual=$($SHA256_CMD "$tmp/$archive" | awk '{print $1}')
