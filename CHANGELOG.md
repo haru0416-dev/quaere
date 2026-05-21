@@ -17,6 +17,28 @@ Patch release: rebuild the Linux release binaries against musl libc so they no l
 
 - `evals/terminal_bench/README.md`'s `tb run` smoke examples used flags that no longer exist in the current terminal-bench CLI (`--task`, `--output-dir`, `TB_AGENT_REGISTRY`). Replaced with the canonical form (`--agent-import-path`, `--task-id`, `--output-path`, `--dataset 'terminal-bench-core==0.1.1'`) that the v0.3.0-era smoke run actually used.
 
+### Measured
+
+In-tree sweep (18 scenarios / 106 assertions, OAuth Codex single-run):
+
+| mode       | assertion pass rate | scenarios |
+| ---------- | ------------------: | --------: |
+| Baseline   | 53% (56 / 106)      | 0 / 18    |
+| With skill | **91% (96 / 106)**  | **10 / 18** |
+| Δ          | **+37.7 pp**        | +10       |
+
+This is the first sweep where the v0.3 line was measured directly; v0.2.1 reported `+27 pp` on 97 assertions.
+
+Terminal-Bench (`terminal-bench-core==0.1.1`, 80 tasks, both modes via `evals/terminal_bench/`):
+
+| mode       | resolved   | accuracy |
+| ---------- | ---------: | -------: |
+| Baseline   | 45 / 80    | 56.25%   |
+| With skill | 31 / 80    | 38.75%   |
+| Δ          | —          | **−17.5 pp** |
+
+Of 20 regressions, 17 hit `agent_timeout`; the `agent_timeout` count jumped from 9 (baseline) to 33 (with-skill). Quaere's deliberation pass widens wall time on time-boxed tasks past the grader's budget. The in-tree number is the load-bearing measurement; the Terminal-Bench number is reported for honesty, not as a quality verdict. See [`docs/evaluation.md`](docs/evaluation.md).
+
 ## [0.3.0] — 2026-05-20
 
 Minor release: introduces an agent-aware install pipeline (`quaere install claude / codex / all`) so the same CLI deploys to both Claude Code (`~/.claude/skills/`) and Codex CLI (`~/.agents/skills/`). The curl one-liner now ends with an explicit `quaere install all` step and a `Commands:` block, and `quaere install --force` swaps skills atomically so a mid-extract failure no longer leaves dest half-written.
