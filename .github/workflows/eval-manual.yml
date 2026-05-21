@@ -74,6 +74,16 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: eval-results-${{ github.run_id }}
-          path: eval-results/
+          # `path` accepts a multi-line pattern: include eval-results/ but
+          # drop scenario `workspace/` trees (they hold copies of fixture
+          # source the agent edited — already in the repo under
+          # eval-fixtures/) and any `.git/` directories the agent may have
+          # initialised. This keeps stdout, prompts, grades, and metadata
+          # accessible while not republishing source the artifact does not
+          # need.
+          path: |
+            eval-results/
+            !eval-results/**/workspace/**
+            !eval-results/**/.git/**
           if-no-files-found: warn
           retention-days: 30

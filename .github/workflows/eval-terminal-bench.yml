@@ -139,6 +139,15 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: tb-results-${{ steps.tasks.outputs.tag }}-${{ inputs.agent }}-${{ github.run_id }}
-          path: eval-results/
+          # asciinema (.cast) terminal recordings capture everything the
+          # codex CLI printed inside the per-task container, including
+          # whatever env or auth state it happened to log. Drop them from
+          # the artifact so a curious task that prints `env` cannot leak
+          # OPENAI_API_KEY / ANTHROPIC_API_KEY into a public artifact.
+          # results.json + run_metadata.json + per-task grades are kept.
+          path: |
+            eval-results/
+            !eval-results/**/*.cast
+            !eval-results/**/sessions/**
           if-no-files-found: warn
           retention-days: 30

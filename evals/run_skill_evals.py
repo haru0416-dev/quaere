@@ -391,10 +391,20 @@ def run_job(
         output_file.write_text("", encoding="utf-8")
         stderr_file.write_text("", encoding="utf-8")
     else:
+        # GIT_CEILING_DIRECTORIES caps the agent's `git` invocations at the
+        # scenario workspace, so a scenario that runs `git commit` cannot
+        # walk up and accidentally land its commit in the parent Quaere
+        # repo (which had happened in the v0.3.1 sweep, producing two
+        # eval-results blobs that had to be filter-repo'd out of history).
+        # `os.path.dirname(workspace_dir)` is the ceiling — any ancestor of
+        # it is invisible to git.
+        run_env = os.environ.copy()
+        run_env["GIT_CEILING_DIRECTORIES"] = str(job.workspace_dir.parent)
         try:
             completed = subprocess.run(
                 command,
                 cwd=job.workspace_dir,
+                env=run_env,
                 shell=True,
                 text=True,
                 stdout=subprocess.PIPE,
