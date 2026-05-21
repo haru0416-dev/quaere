@@ -186,18 +186,13 @@ python evals/run_skill_evals.py \
   --output-dir "$(pwd)/eval-results/$(date -u +%Y%m%dT%H%M%SZ)"
 ```
 
-See [`evals/README.md`](evals/README.md) for the full assertion-type table, the three `llm_judge` backends (Anthropic SDK / openai-compat / Codex CLI), the locale-alternate mechanism, and the Terminal-Bench adapter.
+See [`docs/evaluation.md`](docs/evaluation.md) for measurement notes and [`evals/README.md`](evals/README.md) for the full assertion-type table, judge backends, locale alternates, and Terminal-Bench adapter.
 
-## Roadmap
+## Docs
 
-The in-tree eval does not substitute for third-party validation. Four external benchmarks are tracked for future integration, in this priority order:
-
-1. **[Terminal-Bench v2](https://www.tbench.ai/)** — 80-task `terminal-bench-core` v0.1.1 (the current public leaderboard subset, out of 241 in the broader pool). The closest fit for `quaere-execution` and `quaere-grounding`. Highest expected Δ. **v0.3.0 shipped the adapter** at [`evals/terminal_bench/`](evals/terminal_bench/) with two Codex-CLI-wrapping agents (`quaere-tb-codex-baseline` / `quaere-tb-codex-with-skill`) and a manual-trigger CI workflow. Smoke / full / leaderboard phases per the adapter README.
-2. **[SWE-bench Verified](https://www.swebench.com/)** — 500 human-verified GitHub-issue patches. The standard credibility test for coding agents; non-optional eventually. Heavy infra cost (≥ 120 GB storage, 16 GB RAM, 8 CPU) and substantial API budget. Targeted for v1.0.
-3. **[SkillsBench](https://www.skillsbench.ai/)** — 84 domain-skill tasks (3D, robotics, security PCAP, energy, etc.). Submission unit is "agent that uses skills". Lower expected Δ because domain skills dominate; Quaere's process-correction angle is less visible. Tracked, not committed.
-4. **SWE-Bench Pro** — harder successor to Verified. Considered only after Verified.
-
-Quaere's claim is that process-correction skills raise any agent's deliberation quality. Terminal-Bench tests this claim head-on; SWE-bench Verified tests whether the effect carries over to long-form patch generation. Until those numbers exist, the only published evidence is the in-tree eval result above.
+- [`docs/evaluation.md`](docs/evaluation.md) — measured effect, variance notes, current benchmark limits.
+- [`docs/cli-contracts.md`](docs/cli-contracts.md) — install, force, doctor, and update behavior contracts.
+- [`docs/roadmap.md`](docs/roadmap.md) — external benchmark roadmap.
 
 ## Contributing
 
