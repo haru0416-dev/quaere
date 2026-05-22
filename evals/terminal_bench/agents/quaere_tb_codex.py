@@ -55,7 +55,6 @@ _HOST_CODEX_STATE_FILES = ("auth.json", "config.toml")
 _CURATED_DATASETS = frozenset({"terminal-bench-core"})
 
 _NON_CREDENTIAL_ENV = (
-    "OPENAI_BASE_URL",
     "CODEX_MODEL",
     "CODEX_HOME",
     # Forwarded so install-with-skill.sh can switch between the prebuilt-binary
@@ -66,6 +65,15 @@ _NON_CREDENTIAL_ENV = (
 _CREDENTIAL_ENV = (
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",  # codex may pass-through to anthropic backends
+    # OPENAI_BASE_URL is treated as credential-bearing because it can carry
+    # HTTP basic-auth userinfo (`https://user:pass@host/...`) that the OpenAI
+    # SDKs forward to whatever host the URL points at. The Codex CLI itself
+    # does not read this env var (confirmed by binary inspection on v0.128.0),
+    # but task bodies that import openai-python / openai-node will. Gating
+    # this on the same allowlist as the API keys closes the last bypass the
+    # F-001 credential-forwarding mitigation had — see audit grounding turn
+    # 2026-05-23.
+    "OPENAI_BASE_URL",
 )
 
 # One-shot warning so we do not spam the operator with the same line per
