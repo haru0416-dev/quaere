@@ -29,6 +29,18 @@ Security release. Addresses the four findings from the v0.3.1 audit (F-001 — F
 - `evals/run_skill_evals.py` sets `GIT_CEILING_DIRECTORIES` to the scenario workspace's parent before spawning the agent so a `git commit` inside the workspace cannot walk up and land changes in the parent Quaere repo. (One incident during the v0.3.1 in-tree sweep had to be removed via `git filter-repo` before this push.)
 - `eval-manual.yml` artifact upload now drops `eval-results/**/workspace/**` and `**/.git/**`. `eval-terminal-bench.yml` drops `.cast` recordings and `sessions/**` so a task that printed `env` or `cat $HOME/.codex/auth.json` cannot embed credentials in a public artifact.
 
+### Measured
+
+Terminal-Bench (`terminal-bench-core==0.1.1`, 80 tasks, `--global-agent-timeout-sec 1800`):
+
+| mode       | resolved   | accuracy |
+| ---------- | ---------: | -------: |
+| Baseline   | 41 / 80    | 51.25%   |
+| With skill | 42 / 80    | **52.50%** |
+| Δ          | —          | **+1.25 pp** |
+
+Narrow positive, well inside run-to-run variance. The honest reading is "Quaere does not regress Terminal-Bench performance"; do not market this as a measurable improvement. The v0.3.1 Δ of −17.5 pp on the same dataset is superseded — that number was dominated by install-pipeline / `agent_timeout` failures (76 timeouts in the worst rerun), not by skill quality. With the v0.3.2 install pipeline (cosign-verified, container bootstrap) and the raised agent timeout, `agent_timeout` count drops from 76 to 7. See [`docs/evaluation.md`](docs/evaluation.md) for the per-task breakdown.
+
 ## [0.3.1] — 2026-05-21
 
 Patch release: rebuild the Linux release binaries against musl libc so they no longer require a specific GLIBC version. v0.3.0's `x86_64-unknown-linux-gnu` artifact was built against GLIBC 2.39 (Ubuntu 24.04 builder) and refused to run on Debian Bookworm (2.36), Ubuntu 22.04 (2.35), and older. The musl static binaries are GLIBC-independent and run unchanged on Alpine through RHEL 7 class systems.

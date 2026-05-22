@@ -46,7 +46,7 @@ The current headline comes from the v0.3.1 in-tree eval sweep. v0.3.0 / v0.3.1 c
 | **With skill**      | **91% (96 / 106)**  | **10 / 18 pass**   |
 | Δ                   | **+37.7 pp**        | **+10 scenarios**  |
 
-The eval is a regression harness for Quaere's own failure modes, not a third-party benchmark. A separate Terminal-Bench sweep (80 tasks, `terminal-bench-core==0.1.1`) went the other way (baseline 56.25% → with-skill 38.75%); root-cause analysis is in [`docs/evaluation.md`](docs/evaluation.md). Variance notes and roadmap benchmarks live there too.
+The eval is a regression harness for Quaere's own failure modes, not a third-party benchmark. A separate Terminal-Bench sweep (80 tasks, `terminal-bench-core==0.1.1`, v0.3.2 install pipeline) lands baseline 51.25% → with-skill 52.50% (Δ +1.25 pp) — a narrow positive well inside run-to-run variance; read it as "Quaere does not regress Terminal-Bench" rather than a measurable lift. Variance notes and the per-task breakdown live in [`docs/evaluation.md`](docs/evaluation.md).
 
 ## Skills
 
