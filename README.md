@@ -17,10 +17,6 @@ With Quaere:    claim -> evidence -> disconfirming probe -> scoped patch -> veri
 
 In the current in-tree eval sweep, the same scenarios scored **53%** assertion pass rate without the skills and **91%** with them. The eval is not a substitute for external benchmarks; it is a concrete regression harness for the failure modes Quaere is designed to catch.
 
-```bash
-curl -fsSL https://quaere.dev/install.sh | sh
-```
-
 [Why Quaere](#why-quaere) · [Measured effect](#measured-effect) · [Skills](#skills) · [Picking a skill](#picking-a-skill) · [Installation](#installation) · [Docs](#docs) · [quaere.dev](https://quaere.dev/) · [日本語](README.ja.md)
 
 ## Why Quaere
@@ -100,17 +96,14 @@ If two skills seem plausible, choose the one that answers the blocking question 
 
 ## Installation
 
-### Recommended: curl one-liner
+### Homebrew
 
 ```bash
-curl -fsSL https://quaere.dev/install.sh | sh
+brew install haru0416-dev/quaere/quaere
+quaere install all
 ```
 
-Downloads the `quaere` binary, verifies that `SHA256SUMS` was signed by the release workflow itself (cosign keyless OIDC, identity-bound), verifies the archive checksum against the signed `SHA256SUMS`, places the binary in `$HOME/.local/bin/quaere`, runs `quaere install all` to deploy skills to both Claude Code and Codex, and prints the available slash commands.
-
-**Prerequisite: `cosign`** — install via `brew install cosign`, `apt install cosign` (Debian 13+ / Ubuntu 24.04+), or follow <https://docs.sigstore.dev/cosign/system_config/installation/>. Releases starting with v0.3.2 require it; for older tags, use `cargo install quaere-cli --version <X.Y.Z>` instead.
-
-Environment overrides: `QUAERE_VERSION` to pin a tag, `QUAERE_REPO` to install from a fork, `QUAERE_INSTALL_DIR` to relocate the binary, `QUAERE_SKILLS=0` to skip skill deployment.
+The formula lives in the dedicated tap [`haru0416-dev/homebrew-quaere`](https://github.com/haru0416-dev/homebrew-quaere). Homebrew pulls the release tarballs directly from GitHub Releases and verifies them against the recorded SHA256 — no remote shell execution. `quaere install all` then deploys skills to both Claude Code (`~/.claude/skills/`) and Codex CLI (`~/.agents/skills/`).
 
 ### cargo install (Rust toolchain users)
 
@@ -119,27 +112,46 @@ cargo install quaere-cli
 quaere install all
 ```
 
-`cargo install` builds the CLI from source; the second command extracts the bundled skills.
+`cargo install` builds the CLI from source against the crates.io registry; the second command extracts the bundled skills.
 
-### Homebrew
+### Manual download + verify
+
+For full control over what runs, download the release assets and verify the cosign signature explicitly before extracting:
 
 ```bash
-brew install haru0416-dev/quaere/quaere
+tag="v0.3.2"
+target="$(uname -m | sed 's/x86_64/x86_64/;s/aarch64\|arm64/aarch64/')-$(uname -s | grep -qi darwin && echo apple-darwin || echo unknown-linux-musl)"
+base="https://github.com/haru0416-dev/quaere/releases/download/${tag}"
+for asset in "quaere-${tag}-${target}.tar.gz" SHA256SUMS SHA256SUMS.sig SHA256SUMS.pem; do
+    curl -fsSL -O "${base}/${asset}"
+done
+
+# Verify SHA256SUMS was signed by the release workflow itself.
+cosign verify-blob \
+    --certificate SHA256SUMS.pem \
+    --signature SHA256SUMS.sig \
+    --certificate-identity-regexp "^https://github.com/haru0416-dev/quaere/\.github/workflows/release\.yml@refs/tags/${tag}$" \
+    --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+    SHA256SUMS
+
+# Verify the archive checksum, then extract and install.
+sha256sum -c <(grep "quaere-${tag}-${target}\.tar\.gz" SHA256SUMS)
+tar -xzf "quaere-${tag}-${target}.tar.gz" --strip-components=1
+install -m 0755 quaere "${HOME}/.local/bin/quaere"
 quaere install all
 ```
 
-The formula lives in the dedicated tap [`haru0416-dev/homebrew-quaere`](https://github.com/haru0416-dev/homebrew-quaere). It pulls the same release tarballs as the curl installer and verifies them against the recorded `SHA256SUMS`. `quaere install all` then deploys skills to both Claude Code and Codex.
+`cosign` install hints: `brew install cosign`, `apt install cosign` (Debian 13+ / Ubuntu 24.04+), or <https://docs.sigstore.dev/cosign/system_config/installation/>.
 
-### Manual (source checkout)
+### curl one-liner
+
+> ⚠️ This pipes a downloaded script directly to `sh`. The script verifies the binary's cosign signature before running it, so the end-state trust is equivalent to the Manual path — but the verification happens inside code you have not read at the moment of running. Prefer Homebrew or cargo unless you have reviewed [`scripts/install.sh`](scripts/install.sh) in this repo first.
 
 ```bash
-git clone https://github.com/haru0416-dev/quaere.git
-cd quaere
-mkdir -p ~/.claude/skills
-cp -R skills/quaere-* ~/.claude/skills/
+curl -fsSL https://quaere.dev/install.sh | sh
 ```
 
-Each skill is a directory containing a `SKILL.md`. The `name` frontmatter matches the directory name.
+Prerequisite: `cosign` (same install hints as above). Environment overrides: `QUAERE_VERSION` to pin a tag, `QUAERE_REPO` to install from a fork, `QUAERE_INSTALL_DIR` to relocate the binary, `QUAERE_SKILLS=0` to skip skill deployment.
 
 ## Verifying the install
 

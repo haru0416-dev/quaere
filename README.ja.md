@@ -6,10 +6,6 @@
 [![Latest release](https://img.shields.io/github/v/release/haru0416-dev/quaere?label=release&color=6b3fa0)](https://github.com/haru0416-dev/quaere/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-```bash
-curl -fsSL https://quaere.dev/install.sh | sh
-```
-
 [なぜ Quaere](#なぜ-quaere) · [スキル](#スキル) · [選び方](#選び方) · [インストール](#インストール) · [動作確認](#動作確認) · [quaere.dev](https://quaere.dev/)
 
 これは [README.md](README.md) の日本語版。原文は英語、こちらは日本語で読みたい人向けの翻訳。
@@ -97,17 +93,14 @@ quaere-semantic → quaere-grounding → quaere-evidence → quaere-execution
 
 ## インストール
 
-### curl ワンライナー (推奨)
+### Homebrew
 
 ```bash
-curl -fsSL https://quaere.dev/install.sh | sh
+brew install haru0416-dev/quaere/quaere
+quaere install all
 ```
 
-取得、`SHA256SUMS` の cosign keyless OIDC 署名検証 (リリースワークフローの identity に bind 済み)、署名済み `SHA256SUMS` を使った tar.gz のチェックサム検証、`$HOME/.local/bin/quaere` への配置、`quaere install all` によるスキル展開、利用可能コマンドの表示までを一括で行う。
-
-**前提: `cosign`** — `brew install cosign`、`apt install cosign` (Debian 13+ / Ubuntu 24.04+)、または <https://docs.sigstore.dev/cosign/system_config/installation/> を参照。v0.3.2 以降の release は必須。それ以前のタグを使うなら `cargo install quaere-cli --version <X.Y.Z>` を選ぶ。
-
-環境変数で上書きできる項目: `QUAERE_VERSION` (タグ固定)、`QUAERE_REPO` (fork から取得)、`QUAERE_INSTALL_DIR` (バイナリの配置先)、`QUAERE_SKILLS=0` (スキル展開のスキップ)。
+formula は専用 tap リポジトリ [`haru0416-dev/homebrew-quaere`](https://github.com/haru0416-dev/homebrew-quaere) にある。Homebrew が GitHub Releases から release tarball を直接取得し、記録済みの SHA256 と照合する — リモートシェル実行は介在しない。`quaere install all` がスキルを Claude Code (`~/.claude/skills/`) と Codex CLI (`~/.agents/skills/`) の両方に展開する。
 
 ### cargo install (Rust 環境がある場合)
 
@@ -116,27 +109,46 @@ cargo install quaere-cli
 quaere install all
 ```
 
-二つ目で内蔵スキルを Claude Code と Codex の両方に展開する。
+crates.io のレジストリからソースをビルドして配置する。二つ目で内蔵スキルを両エージェントに展開する。
 
-### Homebrew
+### 手動ダウンロード + 検証
+
+「何が動くか」を完全に握りたいときの手順。release asset を落とし、cosign 署名を明示的に検証してから展開する:
 
 ```bash
-brew install haru0416-dev/quaere/quaere
+tag="v0.3.2"
+target="$(uname -m | sed 's/x86_64/x86_64/;s/aarch64\|arm64/aarch64/')-$(uname -s | grep -qi darwin && echo apple-darwin || echo unknown-linux-musl)"
+base="https://github.com/haru0416-dev/quaere/releases/download/${tag}"
+for asset in "quaere-${tag}-${target}.tar.gz" SHA256SUMS SHA256SUMS.sig SHA256SUMS.pem; do
+    curl -fsSL -O "${base}/${asset}"
+done
+
+# SHA256SUMS がリリースワークフロー自身で署名されていることを検証。
+cosign verify-blob \
+    --certificate SHA256SUMS.pem \
+    --signature SHA256SUMS.sig \
+    --certificate-identity-regexp "^https://github.com/haru0416-dev/quaere/\.github/workflows/release\.yml@refs/tags/${tag}$" \
+    --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+    SHA256SUMS
+
+# tar.gz のチェックサムを確認してから展開・配置。
+sha256sum -c <(grep "quaere-${tag}-${target}\.tar\.gz" SHA256SUMS)
+tar -xzf "quaere-${tag}-${target}.tar.gz" --strip-components=1
+install -m 0755 quaere "${HOME}/.local/bin/quaere"
 quaere install all
 ```
 
-formula は専用 tap リポジトリ [`haru0416-dev/homebrew-quaere`](https://github.com/haru0416-dev/homebrew-quaere) にある。curl インストーラと同じ release tarball を取得し、`SHA256SUMS` と照合する。`quaere install all` でスキル本体を両エージェントに展開する。
+`cosign` 入手: `brew install cosign`、`apt install cosign` (Debian 13+ / Ubuntu 24.04+)、または <https://docs.sigstore.dev/cosign/system_config/installation/>。
 
-### 手動 (ソース取得)
+### curl ワンライナー
+
+> ⚠️ ダウンロードしたスクリプトをそのまま `sh` に流す形式。スクリプト内部で cosign 署名検証を済ませてからバイナリを実行するので最終的な信用境界は手動経路と同等だが、その検証ステップ自体が「読んでいないコード」の内部で起きる。事前に [`scripts/install.sh`](scripts/install.sh) を読んだ上でなければ、Homebrew / cargo を選んでほしい。
 
 ```bash
-git clone https://github.com/haru0416-dev/quaere.git
-cd quaere
-mkdir -p ~/.claude/skills
-cp -R skills/quaere-* ~/.claude/skills/
+curl -fsSL https://quaere.dev/install.sh | sh
 ```
 
-各スキルは SKILL.md を含むディレクトリで、frontmatter の `name` がディレクトリ名と一致する。
+前提: `cosign` (入手元は上と同じ)。環境変数で上書きできる項目: `QUAERE_VERSION` (タグ固定)、`QUAERE_REPO` (fork から取得)、`QUAERE_INSTALL_DIR` (バイナリの配置先)、`QUAERE_SKILLS=0` (スキル展開のスキップ)。
 
 ## 動作確認
 
