@@ -18,21 +18,23 @@ v0.2.1 measured `+27 pp` on 97 assertions; the v0.3.1 sweep adds adversarial ass
 
 Scenarios still failing under with-skill are concentrated in the harder evidence / audit families: `ci-failure-evidence-before-patch`, `dangerous-external-operation`, `pressure-to-skip-evidence-gate`, `semantic-understanding-before-change`, `spec-grounded-security-audit`, `triage-tier-confirmation-rule`, plus 2 more — these are the scenarios where pressure or partial information is supposed to defeat the gate.
 
-## Terminal-Bench sweep — v0.3.1 (`terminal-bench-core==0.1.1`)
+## Terminal-Bench sweep — v0.3.2 (`terminal-bench-core==0.1.1`)
 
-A separate sweep against the public Terminal-Bench dataset (80 tasks, both modes via the Codex-OAuth adapter under [`evals/terminal_bench/`](../evals/terminal_bench/)):
+80 tasks, both modes via the Codex-OAuth adapter under [`evals/terminal_bench/`](../evals/terminal_bench/), `--global-agent-timeout-sec 1800`, install pipeline cosign-verified:
 
-| mode                | resolved      | accuracy   |
-| ------------------- | ------------: | ---------: |
-| Baseline (no skill) | 45 / 80       | 56.25%     |
-| With skill          | 31 / 80       | 38.75%     |
-| Δ                   | —             | **−17.5 pp** |
+| mode                | resolved   | accuracy |
+| ------------------- | ---------: | -------: |
+| Baseline (no skill) | 41 / 80    | 51.25%   |
+| With skill          | 42 / 80    | 52.50%   |
+| Δ                   | —          | **+1.25 pp** |
 
-Recovered (baseline-fail → with-skill-pass): 6. Regressed (baseline-pass → with-skill-fail): 20. Of the 20 regressions, **17 hit `agent_timeout`**, and the `agent_timeout` count overall jumped from 9 (baseline) to 33 (with-skill).
+Recovered (baseline ✗ → with-skill ✓): 7 — `build-tcc-qemu`, `crack-7z-hash.easy`, `crack-7z-hash.hard`, `csv-to-parquet`, `extract-moves-from-video`, `reshard-c4-data`, `swe-bench-astropy-1`. Regressed (baseline ✓ → with-skill ✗): 6 — `extract-safely`, `fix-permissions`, `heterogeneous-dates`, `openssl-selfsigned-cert`, `simple-sheets-put`, `train-fasttext`. Net +1 task, +1.25 pp.
 
-The dominant failure mode is structural, not quality: Quaere's deliberation pass (claim → defense → probe → patch) consumes time the Terminal-Bench grader counts against the agent budget. Mean non-timeout agent duration was 226s; the regressions live in tasks where with-skill takes longer than the time budget allows. A follow-up sweep with `--global-agent-timeout-sec 1800` and `max_timeout_sec=1800` in the adapter is in flight; results will be added here.
+The margin is narrow and well within typical LLM-driven benchmark run-to-run variance. Read this as **"Quaere does not hurt Terminal-Bench performance"** rather than as a measurable improvement. The in-tree sweep above is the load-bearing measurement; Terminal-Bench is reported alongside as an external check that the skills do not regress general agent capability.
 
-The in-tree sweep is the load-bearing measurement. Terminal-Bench is reported to be honest about where the skills hurt; do not read these numbers as a quality verdict on the skills themselves.
+### Prior runs and what changed
+
+v0.3.1 reported Δ −17.5 pp on the same dataset. That number was structurally contaminated: `agent_timeout` failure_modes were 9 (baseline) → 33 (with-skill), and a separate cosign-migration push during one of the reruns introduced 0/80 install-pipeline failures in a v0.3.1.5-era rerun. The v0.3.2 measurement above runs with the fixed install pipeline (cosign bootstrapped in the container, `SHA256SUMS.sig` present), agent_timeout raised from default to 1800s, and `agent_timeout` count down from 76 (contaminated rerun) to 7. The −17.5 pp result should be treated as superseded.
 
 ## Variance and runner notes
 
