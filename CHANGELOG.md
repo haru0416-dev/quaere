@@ -4,6 +4,31 @@ All notable changes to Quaere are documented in this file. The format follows [K
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-05-22
+
+Security release. Addresses the four findings from the v0.3.1 audit (F-001 — F-004) and adds recurrence prevention for an agent-write incident discovered during the audit cycle.
+
+### Security
+
+- **Release `SHA256SUMS` is now signed with cosign keyless OIDC.** `install.sh` requires `cosign` and verifies the signature against the release workflow's certificate identity (refs/tags/vX.Y.Z) before computing the archive checksum. A `github.com` write compromise can no longer impersonate a signed release without also running the workflow. (F-004, CWE-345.) v0.3.2 is the first signed release; older tags must be installed via `cargo install quaere-cli --version <X.Y.Z>`.
+- **Terminal-Bench adapter gates credential forwarding on a dataset allowlist.** Host `~/.codex/auth.json`, `OPENAI_API_KEY`, and `ANTHROPIC_API_KEY` are forwarded into per-task containers only when `tb run --dataset` names `terminal-bench-core` (currently the sole curated entry) or the operator sets `QUAERE_TB_ALLOW_CRED_FWD=1`. Anything else fails closed and emits a single stderr line so the operator can see why the run aborted. (F-001, CWE-200.)
+- **`quaere eval` no longer walks up from CWD.** `--repo` or `$QUAERE_REPO` is now required; running the binary from inside an attacker-controlled directory can no longer execute a planted `evals/run_skill_evals.py`. (F-002, CWE-426/CWE-427.)
+
+### Fixed
+
+- Homebrew tap bump regex pairs `url` lines with their `sha256` lines by target instead of substituting positionally; the four release SHAs no longer risk being bound to the wrong artifact URL if the formula is ever reordered. (F-003, CWE-665.)
+- cosign install link in `install.sh`, `README.md`, and `README.ja.md` corrected (`/cosign/system_config/installation/`; the prior path 404'd).
+- `evals/terminal_bench/install_scripts/install-with-skill.sh` now bootstraps cosign before invoking the curl|sh installer so the new signature verification works inside the Debian Bookworm task container (apt has no cosign). Pinned to v3.0.6 with SHA256 verification of the downloaded binary on both amd64 and arm64.
+
+### Changed
+
+- Roadmap moved from inline README to `docs/roadmap.md`; CLI behavior contracts moved to `docs/cli-contracts.md`. README gains a short `## Docs` section linking the three reference documents.
+
+### Internal
+
+- `evals/run_skill_evals.py` sets `GIT_CEILING_DIRECTORIES` to the scenario workspace's parent before spawning the agent so a `git commit` inside the workspace cannot walk up and land changes in the parent Quaere repo. (One incident during the v0.3.1 in-tree sweep had to be removed via `git filter-repo` before this push.)
+- `eval-manual.yml` artifact upload now drops `eval-results/**/workspace/**` and `**/.git/**`. `eval-terminal-bench.yml` drops `.cast` recordings and `sessions/**` so a task that printed `env` or `cat $HOME/.codex/auth.json` cannot embed credentials in a public artifact.
+
 ## [0.3.1] — 2026-05-21
 
 Patch release: rebuild the Linux release binaries against musl libc so they no longer require a specific GLIBC version. v0.3.0's `x86_64-unknown-linux-gnu` artifact was built against GLIBC 2.39 (Ubuntu 24.04 builder) and refused to run on Debian Bookworm (2.36), Ubuntu 22.04 (2.35), and older. The musl static binaries are GLIBC-independent and run unchanged on Alpine through RHEL 7 class systems.
