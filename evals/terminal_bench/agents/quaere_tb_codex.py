@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import os
 import shlex
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -45,6 +46,87 @@ CODEX_BIN = "codex"
 # key in auth.json).
 _HOST_CODEX_STATE_FILES = ("auth.json", "config.toml")
 
+# Datasets whose task bodies are considered vetted enough to be allowed
+# read access to the host's Codex OAuth state and API keys. terminal-bench
+# -core is the curated public leaderboard subset; restricting to it (and
+# its explicit opt-in counterpart) prevents the adapter from silently
+# leaking credentials into arbitrary or third-party task definitions.
+# See audit finding F-001.
+_CURATED_DATASETS = frozenset({"terminal-bench-core"})
+
+_NON_CREDENTIAL_ENV = (
+    "OPENAI_BASE_URL",
+    "CODEX_MODEL",
+    "CODEX_HOME",
+    # Forwarded so install-with-skill.sh can switch between the prebuilt-binary
+    # and cargo install paths and pin a quaere-cli version.
+    "QUAERE_USE_CARGO",
+    "QUAERE_VERSION",
+)
+_CREDENTIAL_ENV = (
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",  # codex may pass-through to anthropic backends
+)
+
+# One-shot warning so we do not spam the operator with the same line per
+# task. Reset to True on import; flipped to False after the first time
+# we refuse to forward credentials.
+_warned_about_refusal = False
+
+
+def _dataset_is_curated() -> bool:
+    """Return True if `tb run --dataset` named a curated dataset.
+
+    Inspects sys.argv because the adapter is consulted before the harness
+    exposes the run config back to perform_task. terminal-bench encodes
+    the dataset spec as either `--dataset NAME` or `--dataset NAME==X.Y.Z`;
+    both forms reduce to the same allowlist check after splitting on `==`.
+    `--dataset=NAME[==...]` (single-arg form) is handled too.
+    """
+    argv = sys.argv
+    for i, token in enumerate(argv):
+        if token == "--dataset" and i + 1 < len(argv):
+            return argv[i + 1].split("==", 1)[0] in _CURATED_DATASETS
+        if token.startswith("--dataset="):
+            return token.split("=", 1)[1].split("==", 1)[0] in _CURATED_DATASETS
+    return False
+
+
+def _credential_forwarding_allowed() -> bool:
+    """Return True if it is safe to forward host OAuth / API keys into a
+    per-task container. Two opt-ins:
+
+    - `QUAERE_TB_ALLOW_CRED_FWD=1` — explicit override for users who have
+      vetted a custom or third-party dataset themselves.
+    - `tb run --dataset terminal-bench-core[==X.Y.Z]` — curated dataset
+      allowlist; the published leaderboard subset is treated as trusted.
+
+    Anything else (custom dataset path, unspecified dataset, unknown
+    upstream package) fails closed. The container will run without host
+    credentials and codex will fail at the first call — which is the
+    intended behavior: a benchmark run that silently leaks the user's
+    ChatGPT session into untrusted task code is worse than a benchmark
+    run that fails loudly.
+    """
+    if os.environ.get("QUAERE_TB_ALLOW_CRED_FWD") == "1":
+        return True
+    return _dataset_is_curated()
+
+
+def _refuse_credential_forwarding_once(reason: str) -> None:
+    """Emit a one-shot stderr line so the operator can see why credentials
+    were withheld. Per-task printing would be too noisy on an 80-task sweep."""
+    global _warned_about_refusal
+    if _warned_about_refusal:
+        return
+    _warned_about_refusal = True
+    print(
+        f"[quaere-tb] refusing to forward host Codex credentials: {reason}. "
+        "Set QUAERE_TB_ALLOW_CRED_FWD=1 to override after vetting the "
+        "task suite, or run against `--dataset terminal-bench-core[==X.Y.Z]`.",
+        file=sys.stderr,
+    )
+
 
 def _host_codex_dir() -> Path:
     """Resolve the host's CODEX_HOME, honoring the env var override."""
@@ -61,7 +143,19 @@ def _copy_host_codex_state(session) -> None:
     present) and installs them at `$HOME/.codex/` with mode 0600 before invoking
     `codex` for the first time. Silently skips files that do not exist on the
     host so OPENAI_API_KEY / env-only flows keep working unchanged.
+
+    Refuses to copy when the dataset is not in the curated allowlist and
+    `QUAERE_TB_ALLOW_CRED_FWD` is not set — task code inside the container
+    can read the forwarded auth.json regardless of file mode, so an
+    untrusted task body would be able to exfiltrate the host's ChatGPT
+    session.
     """
+    if not _credential_forwarding_allowed():
+        _refuse_credential_forwarding_once(
+            "dataset is not in the curated allowlist and "
+            "QUAERE_TB_ALLOW_CRED_FWD is not set"
+        )
+        return
     host_dir = _host_codex_dir()
     for name in _HOST_CODEX_STATE_FILES:
         path = host_dir / name
@@ -77,28 +171,21 @@ def _copy_host_codex_state(session) -> None:
 def _shared_env() -> dict[str, str]:
     """Environment shared between baseline and with-skill agent runs.
 
-    Pulls API keys / model selection from the orchestrator's env so the
-    same credentials power both modes; refuses to manufacture defaults so
-    misconfiguration surfaces at agent-start, not mid-task.
+    Non-credential configuration (model, base URL, install-path toggles)
+    is always passed through. Credential env vars
+    (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) are gated on the same allowlist
+    as auth.json forwarding — see `_credential_forwarding_allowed`.
     """
     env: dict[str, str] = {}
-    for var in (
-        "OPENAI_API_KEY",
-        "OPENAI_BASE_URL",
-        "ANTHROPIC_API_KEY",  # codex may pass-through to anthropic backends
-        "CODEX_MODEL",
-        "CODEX_HOME",
-        # Forwarded so the with-skill install script (`install-with-skill.sh`)
-        # can switch from the prebuilt-binary path to cargo when the host has
-        # opted into source builds inside the container. Needed today because
-        # the v0.3.0 Linux binary was built against GLIBC 2.39 and the tb
-        # task containers (Debian Bookworm) ship GLIBC 2.36.
-        "QUAERE_USE_CARGO",
-        "QUAERE_VERSION",
-    ):
+    for var in _NON_CREDENTIAL_ENV:
         value = os.environ.get(var)
         if value is not None:
             env[var] = value
+    if _credential_forwarding_allowed():
+        for var in _CREDENTIAL_ENV:
+            value = os.environ.get(var)
+            if value is not None:
+                env[var] = value
     return env
 
 
@@ -128,7 +215,7 @@ def _run_codex_command(task_description: str) -> "TerminalCommand":
     # block=True so the harness waits up to max_timeout_sec for codex to
     # finish; the default (False) returns immediately after the keys are
     # sent and the test phase starts before codex has time to act.
-    return TerminalCommand(command=command, max_timeout_sec=900, block=True)
+    return TerminalCommand(command=command, max_timeout_sec=1800, block=True)
 
 
 def _import_abstract_installed_agent() -> type:

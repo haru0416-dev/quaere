@@ -60,12 +60,22 @@ a non-default auth directory.
 - Do not run parallel sweeps from the same host: concurrent token
   refresh on the same OAuth session is race-prone.
 - A container that runs a Terminal-Bench task can read the forwarded
-  token. This is acceptable when the task suite is vendor-curated
-  (terminal-bench-core), but treat it as a privileged credential: do not
-  point the adapter at untrusted custom task definitions.
+  token. To prevent silent leakage into an untrusted task suite, the
+  adapter only forwards credentials when the dataset is in the curated
+  allowlist (`terminal-bench-core` today) or when the operator sets
+  `QUAERE_TB_ALLOW_CRED_FWD=1` to acknowledge they have vetted the
+  task bodies. Anything else fails closed and the run aborts at the
+  first `codex` call. (Audit finding F-001, CWE-200.)
+- The same allowlist gates `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`
+  env-var forwarding: the adapter does not pass either to the
+  container unless the dataset is curated or `QUAERE_TB_ALLOW_CRED_FWD=1`.
+  Configuration env vars (`OPENAI_BASE_URL`, `CODEX_MODEL`,
+  `CODEX_HOME`, `QUAERE_USE_CARGO`, `QUAERE_VERSION`) are always
+  passed through.
 - CI workflows (`.github/workflows/eval-terminal-bench.yml`) cannot use
   this path — the GitHub runner has no host auth state. Use
-  `OPENAI_API_KEY` in CI.
+  `OPENAI_API_KEY` in CI, with the dataset pinned to
+  `terminal-bench-core` so the allowlist passes.
 
 ## Running locally
 
