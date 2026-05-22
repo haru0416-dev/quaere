@@ -44,10 +44,42 @@ if [[ -f /installed-agent/auth.json ]]; then
     echo "codex login state restored from host"
 fi
 
+# 2.6. Bootstrap cosign so the curl|sh path in step 3 can verify the
+#      release signature (install.sh requires `cosign` since v0.3.2).
+#      Debian Bookworm's apt has no cosign package, so we pull a pinned
+#      binary from the upstream release. The SHA256 anchors against the
+#      v3.0.6 release; bump together with QUAERE_VERSION moves if the
+#      release pipeline drops the cosign requirement or pins another
+#      version. Skipped in the cargo path (which does not consume
+#      install.sh).
+COSIGN_VERSION="${COSIGN_VERSION:-v3.0.6}"
+COSIGN_SHA_AMD64="c956e5dfcac53d52bcf058360d579472f0c1d2d9b69f55209e256fe7783f4c74"
+COSIGN_SHA_ARM64="bedac92e8c3729864e13d4a17048007cfafa79d5deca993a43a90ffe018ef2b8"
+
+bootstrap_cosign() {
+    if command -v cosign >/dev/null 2>&1; then
+        return 0
+    fi
+    local arch sha url tmp
+    case "$(uname -m)" in
+        x86_64|amd64)  arch="amd64"; sha="$COSIGN_SHA_AMD64" ;;
+        aarch64|arm64) arch="arm64"; sha="$COSIGN_SHA_ARM64" ;;
+        *) echo "ERROR: unsupported arch for cosign bootstrap: $(uname -m)" >&2; exit 1 ;;
+    esac
+    url="https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-${arch}"
+    tmp="$(mktemp)"
+    curl -fsSL -o "$tmp" "$url"
+    echo "$sha  $tmp" | sha256sum -c - >/dev/null \
+        || { echo "ERROR: cosign $COSIGN_VERSION linux-$arch SHA256 mismatch" >&2; exit 1; }
+    install -m 0755 "$tmp" /usr/local/bin/cosign
+    rm -f "$tmp"
+    cosign version 2>&1 | head -3
+}
+
 # 3. Quaere CLI via the curl one-liner. Uses the prebuilt binary path (no
-#    Rust toolchain in the container), with SHA256 verification baked into
-#    install.sh. Falls back to cargo install only if explicitly requested
-#    via QUAERE_USE_CARGO=1.
+#    Rust toolchain in the container), with SHA256 + cosign keyless OIDC
+#    verification baked into install.sh. Falls back to cargo install only
+#    if explicitly requested via QUAERE_USE_CARGO=1.
 if [[ "${QUAERE_USE_CARGO:-0}" == "1" ]]; then
     # cargo build needs a working C toolchain to link the rustls / openssl
     # build scripts; the default Debian Bookworm tb container does not ship
@@ -66,6 +98,7 @@ if [[ "${QUAERE_USE_CARGO:-0}" == "1" ]]; then
     fi
     cargo install quaere-cli ${QUAERE_VERSION:+--version "$QUAERE_VERSION"}
 else
+    bootstrap_cosign
     export QUAERE_VERSION
     curl -fsSL "$QUAERE_INSTALL_URL" | sh
 fi
