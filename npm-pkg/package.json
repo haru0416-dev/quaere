@@ -1,0 +1,42 @@
+{
+  "name": "quaere-cli",
+  "version": "0.3.2",
+  "description": "Install Quaere process-correction skills for Claude Code and Codex",
+  "type": "module",
+  "bin": {
+    "quaere-cli": "dist/cli.js",
+    "quaere": "dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "skills/"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup && node scripts/copy-skills.mjs",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "claude-code",
+    "codex",
+    "skills",
+    "coding-agent",
+    "quaere"
+  ],
+  "author": "Haru",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/haru0416-dev/quaere"
+  },
+  "homepage": "https://quaere.dev"
+}
