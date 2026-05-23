@@ -3,11 +3,14 @@ declare const __VERSION__: string
 const REPO = 'haru0416-dev/quaere'
 const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`
 
+function parseSemver(s: string): number[] {
+  return s.replace(/^v/, '').split('.').map(Number)
+}
+
 /** Compares two semver strings (strips leading 'v'). Returns -1, 0, or 1. */
 function compareSemver(a: string, b: string): number {
-  const parse = (s: string) => s.replace(/^v/, '').split('.').map(Number)
-  const [aMaj = 0, aMin = 0, aPat = 0] = parse(a)
-  const [bMaj = 0, bMin = 0, bPat = 0] = parse(b)
+  const [aMaj = 0, aMin = 0, aPat = 0] = parseSemver(a)
+  const [bMaj = 0, bMin = 0, bPat = 0] = parseSemver(b)
   if (aMaj !== bMaj) return aMaj > bMaj ? 1 : -1
   if (aMin !== bMin) return aMin > bMin ? 1 : -1
   if (aPat !== bPat) return aPat > bPat ? 1 : -1

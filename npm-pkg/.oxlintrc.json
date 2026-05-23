@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn",
+    "style": "off"
+  },
+  "env": {
+    "node": true,
+    "es2024": true
+  },
+  "rules": {
+    "no-underscore-dangle": ["warn", { "allow": ["__VERSION__"] }]
+  },
+  "ignorePatterns": ["dist/**", "skills/**", "node_modules/**"]
+}

@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
-import { join } from 'path'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 export interface Manifest {
   quaere_version: string
@@ -31,5 +31,5 @@ export function mergeManifest(
   newSkills: string[],
 ): Manifest {
   const skills = new Set([...(existing?.skills ?? []), ...newSkills])
-  return { quaere_version: version, skills: [...skills].sort() }
+  return { quaere_version: version, skills: [...skills].toSorted() }
 }

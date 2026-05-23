@@ -1,5 +1,5 @@
-import { cpSync, existsSync, mkdirSync, renameSync, rmSync } from 'fs'
-import { join } from 'path'
+import { cpSync, existsSync, mkdirSync, renameSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import { mergeManifest, readManifest, writeManifest } from '../lib/manifest.js'
 import { Agent, resolveTargetDirs } from '../lib/paths.js'
 import { getBundledSkills } from '../lib/skills.js'
