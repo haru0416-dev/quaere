@@ -1,5 +1,5 @@
-import { type Dirent, readdirSync } from 'fs'
-import { join } from 'path'
+import { type Dirent, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { getPackageSkillsDir } from './paths.js'
 
 export interface SkillEntry {
@@ -10,7 +10,7 @@ export interface SkillEntry {
 export function getBundledSkills(): SkillEntry[] {
   const skillsDir = getPackageSkillsDir()
   return readdirSync(skillsDir, { withFileTypes: true })
-    .filter((d: Dirent) => d.isDirectory() && /^quaere-/.test(d.name))
+    .filter((d: Dirent) => d.isDirectory() && d.name.startsWith('quaere-'))
     .map((d: Dirent) => ({ name: d.name, dir: join(skillsDir, d.name) }))
-    .sort((a: SkillEntry, b: SkillEntry) => a.name.localeCompare(b.name))
+    .toSorted((a: SkillEntry, b: SkillEntry) => a.name.localeCompare(b.name))
 }

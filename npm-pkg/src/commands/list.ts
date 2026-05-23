@@ -1,4 +1,4 @@
-import { existsSync } from 'fs'
+import { existsSync } from 'node:fs'
 import { readManifest } from '../lib/manifest.js'
 import { getClaudeSkillsDir, getCodexSkillsDir } from '../lib/paths.js'
 

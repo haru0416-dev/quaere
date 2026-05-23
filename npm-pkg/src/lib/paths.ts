@@ -1,13 +1,13 @@
-import { existsSync } from 'fs'
-import { homedir } from 'os'
-import { dirname, join } from 'path'
-import { fileURLToPath } from 'url'
+import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-// Resolve the package root from the compiled dist/cli.js location
+// dist/cli.mjs lives at the package root's dist/ — skills/ is its sibling under dist/
 const distDir = dirname(fileURLToPath(import.meta.url))
 
 export function getPackageSkillsDir(): string {
-  return join(distDir, '..', 'skills')
+  return join(distDir, 'skills')
 }
 
 export function getClaudeSkillsDir(): string {

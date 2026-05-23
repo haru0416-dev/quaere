@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, readdirSync } from 'fs'
-import { join } from 'path'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { parseFrontmatter } from '../lib/frontmatter.js'
 import { readManifest } from '../lib/manifest.js'
 import { getClaudeSkillsDir, getCodexSkillsDir } from '../lib/paths.js'
@@ -105,7 +105,7 @@ function checkTarget(label: string, dir: string): TargetResult {
   if (existsSync(dir)) {
     const entries = readdirSync(dir, { withFileTypes: true })
     for (const entry of entries) {
-      if (entry.isDirectory() && /^quaere-/.test(entry.name) && !manifestedSet.has(entry.name)) {
+      if (entry.isDirectory() && entry.name.startsWith('quaere-') && !manifestedSet.has(entry.name)) {
         result.orphans.push(entry.name)
       }
     }
