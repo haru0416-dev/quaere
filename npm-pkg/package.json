@@ -4,8 +4,8 @@
   "description": "Install Quaere process-correction skills for Claude Code and Codex",
   "type": "module",
   "bin": {
-    "quaere-cli": "dist/cli.js",
-    "quaere": "dist/cli.js"
+    "quaere-cli": "dist/cli.mjs",
+    "quaere": "dist/cli.mjs"
   },
   "files": [
     "dist/",
@@ -15,14 +15,14 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "tsup && node scripts/copy-skills.mjs",
-    "dev": "tsup --watch",
+    "build": "tsdown && node scripts/copy-skills.mjs",
+    "dev": "tsdown --watch",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
-    "tsup": "^8.0.0",
+    "tsdown": "^0.22.0",
     "typescript": "^5.0.0"
   },
   "keywords": [
