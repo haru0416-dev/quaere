@@ -30,8 +30,6 @@ Coding agents drift at four predictable points:
 
 Quaere slows the agent down at those points. It does not try to make agents more verbose or more cautious everywhere; it forces one move where drift is expensive: **state a claim, defend it with evidence, only then act.**
 
-The name comes from Latin *quaere* — "ask", "seek", "interrogate". Every skill in this collection enforces the same gate.
-
 ### Measured effect
 
 The current headline comes from the v0.3.1 in-tree eval sweep. v0.3.0 / v0.3.1 changed the CLI and install pipeline, not the skill bodies, so the result describes the shipped skills:
@@ -42,7 +40,7 @@ The current headline comes from the v0.3.1 in-tree eval sweep. v0.3.0 / v0.3.1 c
 | **With skill**      | **91% (96 / 106)**  | **10 / 18 pass**   |
 | Δ                   | **+37.7 pp**        | **+10 scenarios**  |
 
-The eval is a regression harness for Quaere's own failure modes, not a third-party benchmark. A separate Terminal-Bench sweep (80 tasks, `terminal-bench-core==0.1.1`, v0.3.2 install pipeline) lands baseline 51.25% → with-skill 52.50% (Δ +1.25 pp) — a narrow positive well inside run-to-run variance; read it as "Quaere does not regress Terminal-Bench" rather than a measurable lift. Variance notes and the per-task breakdown live in [`docs/evaluation.md`](docs/evaluation.md).
+The eval is a regression harness for Quaere's own failure modes, not a third-party benchmark. A separate Terminal-Bench sweep (80 tasks, `terminal-bench-core==0.1.1`, v0.3.2 install pipeline) lands baseline 51.25% → with-skill 52.50% (Δ +1.25 pp); read it as no regression rather than a measurable lift. The per-category numbers tell more: data-processing +60 pp, SWE-bench style +25 pp, security +22 pp, build/compile +17 pp, ML/AI −10 pp, ceiling/floor tasks ~0. Variance notes and the per-task breakdown live in [`docs/evaluation.md`](docs/evaluation.md).
 
 ## Skills
 
@@ -182,7 +180,7 @@ Quick examples:
 
 - Commits happen only when the user explicitly authorizes them.
 - `.agent-state/` is local investigation state by default and should not be committed unless the user asks for it as an artifact.
-- Risky work should prefer evidence and disconfirming checks over patches that just look quick to apply.
+- For security-sensitive paths, database schema, or concurrency changes, use `quaere-evidence` before patching — not after.
 
 ## Evaluation
 

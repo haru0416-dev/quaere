@@ -10,6 +10,7 @@
   <meta property="og:description" content="Process-correction skills that make coding agents ask before they act.">
   <meta property="og:url" content="https://quaere.dev/">
   <meta property="og:type" content="website">
+  <meta name="color-scheme" content="light dark">
   <style>
     :root {
       color-scheme: light dark;
@@ -30,6 +31,16 @@
         --border: #333;
       }
     }
+    @supports (color: light-dark(white, black)) {
+      :root {
+        --fg: light-dark(#111, #eee);
+        --fg-dim: light-dark(#555, #aaa);
+        --bg: light-dark(#fafafa, #16161a);
+        --bg-code: light-dark(#f0f0f0, #1f1f24);
+        --accent: light-dark(#6b3fa0, #a47de6);
+        --border: light-dark(#ddd, #333);
+      }
+    }
     html, body { background: var(--bg); color: var(--fg); }
     body {
       font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -37,10 +48,12 @@
       margin: 0 auto;
       padding: 4rem 1.5rem 6rem;
     }
-    h1 { font-size: 2.5rem; margin: 0 0 .25rem; letter-spacing: -0.02em; }
+    h1 { font-size: 2.5rem; margin: 0 0 .25rem; letter-spacing: -0.02em; text-wrap: balance; }
     h1 small { font-size: 1rem; color: var(--fg-dim); font-weight: 400; }
     .tagline { color: var(--fg-dim); margin: 0 0 2rem; font-size: 1.1rem; }
-    h2 { margin: 2.5rem 0 .75rem; font-size: 1.25rem; }
+    h2 { margin: 2.5rem 0 .75rem; font-size: 1.25rem; text-wrap: balance; }
+    p { text-wrap: pretty; }
+    small { color: var(--fg-dim); font-size: .85em; }
     pre, code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.9em; }
     pre {
       background: var(--bg-code);
@@ -66,11 +79,28 @@
 <body>
   <main>
   <h1>Quaere <small>/ˈkwae̯.re/ — "ask"</small></h1>
-  <p class="tagline">Process-correction skills that make coding agents ask before they act.</p>
+  <p class="tagline">Skills that make coding agents stop and verify before they patch.</p>
+
+  <p>Quaere installs into Claude Code or Codex as a set of skills. When active, an agent must read and form a claim before it writes — it names what it found, checks it against disconfirming evidence, and moves forward only when it can account for the decision. The overhead is roughly <strong>+12% tokens</strong> and <strong>+22% wall time</strong> per task.</p>
+
+  <h2>Where it helps</h2>
+  <p>Measured on Terminal-Bench (80 tasks, Codex CLI). Effect on task resolution rate:</p>
+  <table>
+    <thead><tr><th>Task type</th><th>Δ resolution</th></tr></thead>
+    <tbody>
+      <tr><td>Data processing</td><td>+60 pp</td></tr>
+      <tr><td>SWE-bench style</td><td>+25 pp</td></tr>
+      <tr><td>Security</td><td>+22 pp</td></tr>
+      <tr><td>Build / compile</td><td>+17 pp</td></tr>
+      <tr><td>Already easy / already hard</td><td>~0</td></tr>
+      <tr><td>ML / AI</td><td>−10 pp</td></tr>
+    </tbody>
+  </table>
+  <p><small>Overall: +1.25 pp across all 80 tasks. Ceiling and floor categories don't move; the per-category breakdown tells you more.</small></p>
 
   <h2>Install</h2>
-  <pre><code>curl -fsSL https://quaere.dev/install.sh | sh</code></pre>
-  <p>Or via Rust: <code>cargo install quaere-cli &amp;&amp; quaere install</code>.</p>
+  <pre><code>brew install haru0416-dev/quaere/quaere &amp;&amp; quaere install</code></pre>
+  <p>Or: <code>cargo install quaere-cli &amp;&amp; quaere install</code> &nbsp;·&nbsp; <code>curl -fsSL https://quaere.dev/install.sh | sh</code></p>
 
   <h2>Skills</h2>
   <table>
@@ -87,15 +117,14 @@
   <h2>Manage</h2>
   <pre><code>quaere list      # show installed skills
 quaere doctor    # verify install integrity
-quaere update    # check for a newer release
-quaere version   # print version</code></pre>
+quaere update    # check for a newer release</code></pre>
 
   <nav aria-label="Project resources">
     <h2>Links</h2>
     <ul>
       <li><a href="https://github.com/haru0416-dev/quaere">GitHub repo</a></li>
       <li><a href="https://github.com/haru0416-dev/quaere/releases/latest">Latest release</a></li>
-      <li><a href="https://github.com/haru0416-dev/quaere/blob/main/README.md">README</a></li>
+      <li><a href="https://github.com/haru0416-dev/quaere/blob/main/docs/evaluation.md">Evaluation</a></li>
       <li><a href="https://github.com/haru0416-dev/quaere/blob/main/CHANGELOG.md">CHANGELOG</a></li>
     </ul>
   </nav>
