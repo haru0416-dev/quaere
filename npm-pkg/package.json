@@ -24,14 +24,14 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "citty": "^0.1.6"
+    "citty": "^0.2.2"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "oxlint": "^1.0.0",
     "tsdown": "^0.22.0",
-    "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "typescript": "^6.0.0",
+    "vitest": "^4.0.0"
   },
   "keywords": [
     "claude-code",
