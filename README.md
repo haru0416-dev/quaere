@@ -19,22 +19,11 @@ With Quaere:    claim -> evidence -> disconfirming probe -> scoped patch -> veri
 
 In the current in-tree eval sweep, the same scenarios scored **53%** assertion pass rate without the skills and **91%** with them. The eval is not a substitute for external benchmarks; it is a concrete regression harness for the failure modes Quaere is designed to catch.
 
-[Why Quaere](#why-quaere) · [Measured effect](#measured-effect) · [Skills](#skills) · [Picking a skill](#picking-a-skill) · [Installation](#installation) · [Docs](#docs) · [quaere.dev](https://quaere.dev/) · [日本語](README.ja.md)
+[Measured effect](#measured-effect) · [Skills](#skills) · [Picking a skill](#picking-a-skill) · [Installation](#installation) · [Docs](#docs) · [quaere.dev](https://quaere.dev/) · [日本語](README.ja.md)
 
-## Why Quaere
+## Measured effect
 
-Coding agents drift at four predictable points:
-
-- they read code shallowly,
-- they accept plausible claims without proof,
-- they edit in unreviewed blobs,
-- they commit without authorization.
-
-Quaere slows the agent down at those points. It does not try to make agents more verbose or more cautious everywhere; it forces one move where drift is expensive: **state a claim, defend it with evidence, only then act.**
-
-### Measured effect
-
-The current headline comes from the v0.3.1 in-tree eval sweep. v0.3.0 / v0.3.1 changed the CLI and install pipeline, not the skill bodies, so the result describes the shipped skills:
+The headline comes from the in-tree eval sweep against the shipped skill set (skill bodies have not changed since v0.3.1; the v0.3.x and v0.4.x releases reshaped the CLI and install pipeline, not the skills themselves):
 
 | mode                | assertion pass rate | scenario-level     |
 | ------------------- | ------------------: | -----------------: |
