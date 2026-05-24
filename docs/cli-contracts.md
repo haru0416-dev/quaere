@@ -1,47 +1,40 @@
 # CLI behavior contracts
 
-These are the behavior contracts the CLI is expected to preserve. The Python validator `scripts/validate_skills.py` and the Rust `quaere doctor` are pinned to agree by `tests/test_validator_parity.py`, exercised in the CI `parity` job.
+These are the behavior contracts `quaere-cli` is expected to preserve. The Python validator at `scripts/validate_skills.py` enforces frontmatter / name / line-budget invariants in CI; `quaere-cli doctor` enforces the same invariants at the install targets after deployment.
 
-## Install is additive
+## Install detects the target by default
 
-`quaere install` is additive. Running `quaere install --skill quaere-semantic` and then `quaere install --skill quaere-audit` against the same `--target` accumulates both skills into the manifest.
+`quaere-cli install` with no positional argument auto-detects which agent directories already exist (`~/.claude/` and `~/.agents/`) and deploys to all of them. Pass `claude`, `codex`, or `all` as the positional argument to force a specific target.
+
+## Install is additive and idempotent
+
+`quaere-cli install` deploys every bundled skill into the target manifest. Re-running the same command against a target already at the installed version is a no-op — the version match is checked against `<target>/.quaere/manifest.json`. Pass `--force` to reinstall anyway.
 
 The manifest stays consistent with the union of:
 
-- previously installed skills that still exist on disk
+- skills previously recorded in `<target>/.quaere/manifest.json` by any tool
 - skills installed in the current run
-- skills already present and skipped
 
 Manifest entries are sorted for deterministic diffs.
 
-## Force install is atomic per skill
+## Per-skill install is atomic
 
-`quaere install --force` stages new content at `<target>/.<name>.staging`, renames the previous destination to `<target>/.<name>.backup`, renames staging into place, and only then removes the backup.
+Each skill's install stages new content at `<target>/.<name>.staging`, renames the previous destination to `<target>/.<name>.backup`, renames staging into place, and only then removes the backup.
 
-A mid-extract I/O failure leaves the destination at the previous complete content. Crash residue (`.staging` / `.backup`) is silently skipped by `quaere doctor` and reclaimed on the next install.
+A mid-extract I/O failure leaves the destination at its previous complete content. Crash residue (`.staging` / `.backup`) is silently skipped by `quaere-cli doctor` and reclaimed on the next install.
 
-## Unknown skills fail before writes
+## Update does not modify anything
 
-Unknown `--skill` names are rejected early. A typo like `--skill quaere-semantik` aborts with the list of available skills before anything is written. There is no partial-install fallback.
+`quaere-cli update` calls the GitHub Releases API for `haru0416-dev/quaere`'s latest release, compares the version against the running CLI using semantic version comparison (`X.Y.Z` form; falls back to string comparison if either side is not parseable as semver), and prints an upgrade hint pointing at `npx quaere-cli@<latest> install` / `bunx quaere-cli@<latest> install`.
+
+The command never modifies the binary or the installed skills.
 
 ## Doctor reports orphans
 
-`quaere doctor` surfaces a directory in the install target that is not recorded in the manifest as an orphan.
+`quaere-cli doctor` walks each install target and surfaces:
+
+- skills recorded in the manifest but missing on disk
+- skill directories that fail frontmatter / name / line-budget validation
+- directories in the install target that are not recorded in the manifest
 
 Orphans whose name starts with `quaere-` are treated as errors, because they look like a misbehaving Quaere install. Orphans with any other name are informational only; the install target may be shared with other skill management tools.
-
-## Update does not modify the binary
-
-`quaere update` uses semantic version comparison for the standard `X.Y.Z` form, falling back to string comparison when either side is not parseable as semver.
-
-The command never modifies the binary. It only prints upgrade instructions.
-
-## Default repo
-
-The default `--repo` is `haru0416-dev/quaere`. If you are tracking a fork, override it:
-
-```bash
-quaere update --repo your-fork/quaere
-```
-
-The same applies to `scripts/install.sh` via the `QUAERE_REPO` environment variable.
