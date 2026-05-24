@@ -31,7 +31,12 @@ The headline comes from the in-tree eval sweep against the shipped skill set (sk
 | **With skill**      | **91% (96 / 106)**  | **10 / 18 pass**   |
 | Δ                   | **+37.7 pp**        | **+10 scenarios**  |
 
-The eval is a regression harness for Quaere's own failure modes, not a third-party benchmark. A separate Terminal-Bench sweep (80 tasks, `terminal-bench-core==0.1.1`, v0.3.2 install pipeline) lands baseline 51.25% → with-skill 52.50% (Δ +1.25 pp); read it as no regression rather than a measurable lift. The per-category numbers tell more: data-processing +60 pp, SWE-bench style +25 pp, security +22 pp, build/compile +17 pp, ML/AI −10 pp, ceiling/floor tasks ~0. Variance notes and the per-task breakdown live in [`docs/evaluation.md`](docs/evaluation.md).
+The eval is a regression harness for Quaere's own failure modes, not a third-party benchmark. A separate Terminal-Bench sweep (`terminal-bench-core==0.1.1`, v0.3.2 install pipeline) reports two cuts:
+
+- **+1.25 pp on the full 80-task set** (41/80 → 42/80, 51.25% → 52.50%). Within typical run-to-run variance — read it as "does not regress".
+- **+8.7 pp on the 69 tasks where the install pipeline wasn't broken** (52.2% → 60.9%). The other 11 tasks failed before the skill could load.
+
+The per-category cut, taken on the clean 69-task subset, sits underneath those averages — with small per-category samples (n = 3 to 10), treat the splits as suggestive rather than confirmed effects: data-processing +60 pp, SWE-bench style +25 pp, security +22 pp, build/compile +17 pp, ML/AI −10 pp, the remaining five categories ~0. Variance notes and the per-task breakdown live in [`docs/evaluation.md`](docs/evaluation.md).
 
 ### What that looks like on one task
 
