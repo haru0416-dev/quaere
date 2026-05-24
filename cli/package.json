@@ -47,5 +47,5 @@
     "url": "https://github.com/haru0416-dev/quaere"
   },
   "homepage": "https://quaere.dev",
-  "packageManager": "pnpm@9.15.0"
+  "packageManager": "pnpm@11.3.0"
 }
