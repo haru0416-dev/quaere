@@ -104,8 +104,8 @@
   <p><small>The load-bearing measurement is the <a href="https://github.com/haru0416-dev/quaere/blob/main/docs/evaluation.md">in-tree eval</a> (18 scenarios, +37.7 pp on assertion pass rate). Terminal-Bench is reported alongside as an external no-regression check.</small></p>
 
   <h2>Install</h2>
-  <pre><code>brew install haru0416-dev/quaere/quaere &amp;&amp; quaere install</code></pre>
-  <p>Or: <code>cargo install quaere-cli &amp;&amp; quaere install</code> &nbsp;·&nbsp; <code>curl -fsSL https://quaere.dev/install.sh | sh</code></p>
+  <pre><code>npx quaere-cli install</code></pre>
+  <p>Or: <code>bunx quaere-cli install</code> &nbsp;·&nbsp; <code>npm install -g quaere-cli</code></p>
 
   <h2>Skills</h2>
   <table>
@@ -120,9 +120,9 @@
   </table>
 
   <h2>Manage</h2>
-  <pre><code>quaere list      # show installed skills
-quaere doctor    # verify install integrity
-quaere update    # check for a newer release</code></pre>
+  <pre><code>npx quaere-cli list      # show installed skills
+npx quaere-cli doctor    # verify install integrity
+npx quaere-cli update    # check for a newer release</code></pre>
 
   <nav aria-label="Project resources">
     <h2>Links</h2>
