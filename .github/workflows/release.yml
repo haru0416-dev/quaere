@@ -153,7 +153,10 @@ jobs:
         run: pnpm build
 
       - name: Publish to npm with provenance
+        # Authentication is OIDC-only (npm Trusted Publishers).
+        # The npm registry verifies the GitHub Actions OIDC token against
+        # the trusted-publisher binding configured on
+        # https://www.npmjs.com/package/quaere-cli/access, so no
+        # NODE_AUTH_TOKEN / NPM_TOKEN is needed in this job.
         working-directory: cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: pnpm publish --provenance --access public --no-git-checks
