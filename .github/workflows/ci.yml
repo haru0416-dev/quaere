@@ -25,3 +25,24 @@ jobs:
         run: python scripts/validate_skills.py
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
+
+  cli:
+    name: cli (typescript)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: cli/pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check (lint, typecheck, test)
+        run: pnpm check
