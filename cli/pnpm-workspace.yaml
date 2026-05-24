@@ -1,0 +1,6 @@
+# pnpm 11+ moved per-project settings out of package.json's "pnpm" field
+# into this file. cli/ is not actually a workspace — this file exists
+# only to carry the allowBuilds policy for esbuild's native binary
+# postinstall (a transitive dep of tsdown / rolldown / vitest).
+allowBuilds:
+  esbuild: true
