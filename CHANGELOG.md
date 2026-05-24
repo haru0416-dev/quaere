@@ -4,6 +4,36 @@ All notable changes to Quaere are documented in this file. The format follows [K
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-05-24
+
+Distribution switches from the Rust binary chain (Homebrew + cargo + curl|sh) to a single npm package, `quaere-cli`. The skill bodies are unchanged — the in-tree eval numbers carry over.
+
+### Breaking
+
+- **`brew install`, `cargo install quaere-cli`, and `curl ... install.sh | sh` no longer ship new releases.** v0.3.2 binaries remain downloadable from GitHub Releases for users on the old install paths, but no further versions follow them. The replacement is `npx quaere-cli install`.
+- `scripts/install.sh` is deleted. The `QUAERE_REPO` / `QUAERE_VERSION` / `QUAERE_INSTALL_DIR` / `QUAERE_SKILLS` environment overrides go with it.
+
+### Added
+
+- npm package `quaere-cli` (TypeScript, citty-based CLI, ~12 KB bundled). Same surface as before: `install [claude|codex|all]`, `list`, `doctor`, `update`. The package also exposes `quaere` as a binary alias for users with a global install.
+- npm provenance attestation (Sigstore OIDC) on every release. `npm audit signatures` verifies that the published tarball was built by the release workflow at the exact tag, replacing the cosign signature that previously covered the binary.
+
+### Removed
+
+- `cli/` Rust source (`cli/src/`, `Cargo.toml`, `build.rs`). The directory now holds the npm package.
+- `scripts/install.sh` (curl|sh installer) and `tests/test_validator_parity.py` (Python ↔ Rust validator parity test).
+- `release.yml`: cross-compile matrix (`build` job), `bump-homebrew`, `cargo-publish`.
+- `ci.yml`: `cli` (rust toolchain) and `parity` jobs.
+- `pages.yml`: `install.sh` sync into the static site.
+
+### Migration
+
+```bash
+npx quaere-cli install      # replaces every old install method
+```
+
+Users on the old Homebrew tap can `brew uninstall haru0416-dev/quaere/quaere` to clean up.
+
 ## [0.3.2] — 2026-05-22
 
 Security release. Addresses the four findings from the v0.3.1 audit (F-001 — F-004) and adds recurrence prevention for an agent-write incident discovered during the audit cycle.
