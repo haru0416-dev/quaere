@@ -67,7 +67,10 @@ jobs:
           cat SHA256SUMS
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v4
+        # sigstore/cosign-installer does not ship a `v4` major-version
+        # alias tag (only v2 and v3 aliases exist; v4.x is point tags
+        # only). v3 alias still tracks the latest v3.x release.
+        uses: sigstore/cosign-installer@v3
 
       - name: Sign SHA256SUMS (cosign keyless OIDC)
         working-directory: release
