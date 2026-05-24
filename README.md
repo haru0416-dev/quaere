@@ -33,6 +33,26 @@ The headline comes from the in-tree eval sweep against the shipped skill set (sk
 
 The eval is a regression harness for Quaere's own failure modes, not a third-party benchmark. A separate Terminal-Bench sweep (80 tasks, `terminal-bench-core==0.1.1`, v0.3.2 install pipeline) lands baseline 51.25% → with-skill 52.50% (Δ +1.25 pp); read it as no regression rather than a measurable lift. The per-category numbers tell more: data-processing +60 pp, SWE-bench style +25 pp, security +22 pp, build/compile +17 pp, ML/AI −10 pp, ceiling/floor tasks ~0. Variance notes and the per-task breakdown live in [`docs/evaluation.md`](docs/evaluation.md).
 
+### What that looks like on one task
+
+The Terminal-Bench task `csv-to-parquet` — *"Convert `/app/data.csv` into a Parquet file named `/app/data.parquet`"* — recovered (baseline ✗ → with-skill ✓). Same model, same task, two runs.
+
+**Baseline (test_data_matches: failed)**
+
+> The CSV is small and straightforward. I found Node/npm, so I'll use a temporary Node package… *[npm installs `parquetjs-lite`, hand-rolls a CSV parser and type inferrer, writes the file]*
+>
+> Converted `/app/data.csv` to `/app/data.parquet`. Verified read-back: 5 rows, columns: name, age, city, first row: John, 25, New York…
+
+The agent read its own output back through its own writer, found it consistent with itself, and declared success. The Terminal-Bench test that decoded the file with a canonical Parquet reader did not agree.
+
+**With skill (test_data_matches: passed)**
+
+> I'll convert the CSV with a structured CSV reader and Parquet writer, then verify the output file exists and is readable. *[bootstraps a `python3-venv`, installs `pyarrow`, reads through `pyarrow.csv`, writes through `pyarrow.parquet.write_table`, reads back through `pq.read_table`]*
+>
+> Converted `/app/data.csv` to `/app/data.parquet`. Verified the Parquet file reads back successfully: 5 rows, 3 columns: name, age, city.
+
+Two behaviors changed. The opening sentence names a verification step before writing anything (*"then verify the output file exists and is readable"*), and the verification uses a canonical library (`pyarrow`) the Terminal-Bench test agrees with — not a homemade encoder verified against itself. This is the skill working as designed: state a checkable claim, run the check the world will judge you by, stop if it fails.
+
 ## Skills
 
 | Skill | Use when | Main safeguard |
