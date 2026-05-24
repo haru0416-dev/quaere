@@ -97,3 +97,63 @@ jobs:
             --title "$tag" \
             --generate-notes \
             --repo "$GITHUB_REPOSITORY"
+
+  npm-publish:
+    name: publish to npm
+    needs: release
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+    # id-token: write enables npm provenance (Sigstore OIDC) attestations
+    # when `pnpm publish --provenance` runs. The provenance attestation
+    # binds the published tarball to this exact workflow ref and tag, so
+    # consumers can verify the chain back to the source commit. This is
+    # the npm-side analog of the cosign signature on the GitHub Release.
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+          cache-dependency-path: cli/pnpm-lock.yaml
+
+      - name: Verify tag matches cli/package.json version
+        working-directory: cli
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag="${RELEASE_TAG#v}"
+          pkg_version=$(node -p "require('./package.json').version")
+          if [ "$tag" != "$pkg_version" ]; then
+            echo "tag $tag does not match cli/package.json version $pkg_version" >&2
+            exit 2
+          fi
+
+      - name: Install dependencies
+        working-directory: cli
+        run: pnpm install --frozen-lockfile
+
+      - name: Check (lint, typecheck, test)
+        working-directory: cli
+        run: pnpm check
+
+      - name: Build
+        working-directory: cli
+        run: pnpm build
+
+      - name: Publish to npm with provenance
+        working-directory: cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm publish --provenance --access public --no-git-checks
