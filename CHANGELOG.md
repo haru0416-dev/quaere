@@ -4,6 +4,18 @@ All notable changes to Quaere are documented in this file. The format follows [K
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-05-24
+
+Maintenance release. No user-facing CLI or skill changes — the bundled skills are byte-identical to v0.4.0. The release exists to retire the temporary `NPM_TOKEN` secret used for the first npm publish and to refresh several CI pins that were two majors behind at v0.4.0 ship.
+
+### Internal
+
+- **Trusted Publishers (OIDC) replaces `NPM_TOKEN` on the npm-publish step.** The Granular Access Token used for the first publish (configured against the broad "All packages" scope because `quaere-cli` did not yet exist on npm) is revoked, and the `NPM_TOKEN` repo secret is deleted. Authentication now flows through GitHub Actions OIDC against the trusted-publisher binding on https://www.npmjs.com/package/quaere-cli/access.
+- CI toolchain catch-up: pnpm 9 → 11, pnpm/action-setup v4 → v6, actions/setup-node v4 → v6, sigstore/cosign-installer v3 → v4, Node runtime in CI 22 → 24 (active LTS). `cli/package.json` `engines.node` stays at `>=22` so users on the maintenance LTS line can still install.
+- `cli/pnpm-workspace.yaml` added. pnpm 11 retired the `pnpm` field in `package.json` and reads per-project settings from this file; it carries the `allowBuilds` policy required to opt in to `esbuild`'s native-binary postinstall (a transitive dep of tsdown / rolldown / vitest).
+- `docs/cli-contracts.md` and `README.ja.md` aligned with the TypeScript port: the Rust CLI had `--target` / `--skill` / `--repo` flags that the TS port does not. Contract entries pinned to flags that no longer exist were removed.
+- Landing page install commands switched to `npx quaere-cli install` / `bunx` / `npm install -g` to match the README.
+
 ## [0.4.0] — 2026-05-24
 
 Distribution switches from the Rust binary chain (Homebrew + cargo + curl|sh) to a single npm package, `quaere-cli`. The skill bodies are unchanged — the in-tree eval numbers carry over.
