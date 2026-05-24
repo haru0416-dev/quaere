@@ -81,7 +81,7 @@
   <h1>Quaere <small>/ˈkwae̯.re/ — "ask"</small></h1>
   <p class="tagline">Skills that make coding agents stop and verify before they patch.</p>
 
-  <p>Quaere installs into Claude Code or Codex as a set of skills. While active, the agent reads first and writes a checkable claim before it edits — naming what it found, running the test, type-check, or probe that could prove it wrong, and stopping if the result doesn't back the claim. Overhead per task: roughly <strong>+12% tokens</strong> and <strong>+22% wall time</strong>.</p>
+  <p>A <a href="https://docs.claude.com/en/docs/claude-code/skills">skill</a> is a markdown file the agent loads on demand based on task context. Quaere ships five. While they are active, the agent reads first and writes a checkable claim before it edits — naming what it found, running the test, type-check, or probe that could prove it wrong, and stopping if the result doesn't back the claim. Overhead per task: roughly <strong>+12% tokens</strong> and <strong>+22% wall time</strong>.</p>
 
   <h2>Where it helps</h2>
   <p>Terminal-Bench, Codex CLI, v0.3.2 sweep. Two cuts:</p>
@@ -136,7 +136,7 @@ npx quaere-cli update    # check for a newer release</code></pre>
   </main>
 
   <footer>
-    Quaere is MIT-licensed. Latin <em>quaere</em>: "ask", "seek", "interrogate".
+    Quaere is MIT-licensed and not affiliated with Anthropic — the skills run through Claude Code's and Codex CLI's built-in skill systems. Latin <em>quaere</em>: "ask", "seek", "interrogate".
   </footer>
 </body>
 </html>
