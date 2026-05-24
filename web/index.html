@@ -81,10 +81,15 @@
   <h1>Quaere <small>/ˈkwae̯.re/ — "ask"</small></h1>
   <p class="tagline">Skills that make coding agents stop and verify before they patch.</p>
 
-  <p>Quaere installs into Claude Code or Codex as a set of skills. When active, an agent must read and form a claim before it writes — it names what it found, checks it against disconfirming evidence, and moves forward only when it can account for the decision. The overhead is roughly <strong>+12% tokens</strong> and <strong>+22% wall time</strong> per task.</p>
+  <p>Quaere installs into Claude Code or Codex as a set of skills. While active, the agent reads first and writes a checkable claim before it edits — naming what it found, running the test, type-check, or probe that could prove it wrong, and stopping if the result doesn't back the claim. Overhead per task: roughly <strong>+12% tokens</strong> and <strong>+22% wall time</strong>.</p>
 
   <h2>Where it helps</h2>
-  <p>Measured on Terminal-Bench (80 tasks, Codex CLI). Effect on task resolution rate:</p>
+  <p>Terminal-Bench, Codex CLI, v0.3.2 sweep. Two cuts:</p>
+  <ul>
+    <li><strong>+1.25 pp</strong> on the full 80-task set (41 → 42 resolved). Within run-to-run variance — read it as "does not regress".</li>
+    <li><strong>+8.7 pp</strong> on the 69 tasks where the install pipeline wasn't broken (52.2% → 60.9%). The other 11 tasks failed before the skill could load.</li>
+  </ul>
+  <p>The per-category cut below comes from the clean 69-task subset. Per-category samples are small (n = 3 to 10), so treat the splits as suggestive rather than confirmed effects:</p>
   <table>
     <thead><tr><th>Task type</th><th>Δ resolution</th></tr></thead>
     <tbody>
@@ -92,11 +97,11 @@
       <tr><td>SWE-bench style</td><td>+25 pp</td></tr>
       <tr><td>Security</td><td>+22 pp</td></tr>
       <tr><td>Build / compile</td><td>+17 pp</td></tr>
-      <tr><td>Already easy / already hard</td><td>~0</td></tr>
+      <tr><td>Other 5 categories (ceiling, floor, or no clear fit)</td><td>~0</td></tr>
       <tr><td>ML / AI</td><td>−10 pp</td></tr>
     </tbody>
   </table>
-  <p><small>Overall: +1.25 pp across all 80 tasks. Ceiling and floor categories don't move; the per-category breakdown tells you more.</small></p>
+  <p><small>The load-bearing measurement is the <a href="https://github.com/haru0416-dev/quaere/blob/main/docs/evaluation.md">in-tree eval</a> (18 scenarios, +37.7 pp on assertion pass rate). Terminal-Bench is reported alongside as an external no-regression check.</small></p>
 
   <h2>Install</h2>
   <pre><code>brew install haru0416-dev/quaere/quaere &amp;&amp; quaere install</code></pre>
@@ -109,8 +114,8 @@
       <tr><td><code>quaere-semantic</code></td><td>Understand unfamiliar code before changing it.</td></tr>
       <tr><td><code>quaere-grounding</code></td><td>Verify external, version-sensitive facts (SDKs, APIs, advisories).</td></tr>
       <tr><td><code>quaere-evidence</code></td><td>Defend or reject claims, bug causes, review comments.</td></tr>
-      <tr><td><code>quaere-execution</code></td><td>Apply a plan with diff review and commit discipline.</td></tr>
-      <tr><td><code>quaere-audit</code></td><td>Property-driven security audit with exploitability gates.</td></tr>
+      <tr><td><code>quaere-execution</code></td><td>Stage a confirmed fix into reviewable, single-purpose commits.</td></tr>
+      <tr><td><code>quaere-audit</code></td><td>Walk a codebase for security properties and reject findings that can't be shown reachable from real input.</td></tr>
     </tbody>
   </table>
 
