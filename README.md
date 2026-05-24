@@ -94,75 +94,48 @@ If two skills seem plausible, choose the one that answers the blocking question 
 
 ## Installation
 
-### Homebrew
+Quaere ships as the `quaere-cli` npm package. The CLI's only job is to copy skill files into `~/.claude/skills/` and `~/.agents/skills/`, so a zero-install run is fine — no global package needed.
 
 ```bash
-brew install haru0416-dev/quaere/quaere
-quaere install all
+npx quaere-cli install
 ```
 
-The formula lives in the dedicated tap [`haru0416-dev/homebrew-quaere`](https://github.com/haru0416-dev/homebrew-quaere). Homebrew pulls the release tarballs directly from GitHub Releases and verifies them against the recorded SHA256 — no remote shell execution. `quaere install all` then deploys skills to both Claude Code (`~/.claude/skills/`) and Codex CLI (`~/.agents/skills/`).
-
-### cargo install (Rust toolchain users)
+This auto-detects which agents are present and deploys to all of them. Pass an explicit target to scope the deployment:
 
 ```bash
-cargo install quaere-cli
-quaere install all
+npx quaere-cli install claude     # only Claude Code
+npx quaere-cli install codex      # only Codex CLI
+npx quaere-cli install all        # both
 ```
 
-`cargo install` builds the CLI from source against the crates.io registry; the second command extracts the bundled skills.
-
-### Manual download + verify
-
-For full control over what runs, download the release assets and verify the cosign signature explicitly before extracting:
+### Bun
 
 ```bash
-tag="v0.3.2"
-target="$(uname -m | sed 's/x86_64/x86_64/;s/aarch64\|arm64/aarch64/')-$(uname -s | grep -qi darwin && echo apple-darwin || echo unknown-linux-musl)"
-base="https://github.com/haru0416-dev/quaere/releases/download/${tag}"
-for asset in "quaere-${tag}-${target}.tar.gz" SHA256SUMS SHA256SUMS.sig SHA256SUMS.pem; do
-    curl -fsSL -O "${base}/${asset}"
-done
-
-# Verify SHA256SUMS was signed by the release workflow itself.
-cosign verify-blob \
-    --certificate SHA256SUMS.pem \
-    --signature SHA256SUMS.sig \
-    --certificate-identity-regexp "^https://github.com/haru0416-dev/quaere/\.github/workflows/release\.yml@refs/tags/${tag}$" \
-    --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-    SHA256SUMS
-
-# Verify the archive checksum, then extract and install.
-sha256sum -c <(grep "quaere-${tag}-${target}\.tar\.gz" SHA256SUMS)
-tar -xzf "quaere-${tag}-${target}.tar.gz" --strip-components=1
-install -m 0755 quaere "${HOME}/.local/bin/quaere"
-quaere install all
+bunx quaere-cli install
 ```
 
-`cosign` install hints: `brew install cosign`, `apt install cosign` (Debian 13+ / Ubuntu 24.04+), or <https://docs.sigstore.dev/cosign/system_config/installation/>.
+### Global install
 
-### curl one-liner
-
-> ⚠️ This pipes a downloaded script directly to `sh`. The script verifies the binary's cosign signature before running it, so the end-state trust is equivalent to the Manual path — but the verification happens inside code you have not read at the moment of running. Prefer Homebrew or cargo unless you have reviewed [`scripts/install.sh`](scripts/install.sh) in this repo first.
+If you would rather have the CLI permanently in PATH:
 
 ```bash
-curl -fsSL https://quaere.dev/install.sh | sh
+npm install -g quaere-cli
+quaere install                    # the package also exposes the `quaere` alias
 ```
 
-Prerequisite: `cosign` (same install hints as above). Environment overrides: `QUAERE_VERSION` to pin a tag, `QUAERE_REPO` to install from a fork, `QUAERE_INSTALL_DIR` to relocate the binary, `QUAERE_SKILLS=0` to skip skill deployment.
-
-## Verifying the install
+### Verifying the install
 
 ```bash
-quaere list      # show installed skills and the recorded version
-quaere doctor    # verify frontmatter, names, line budget, orphans
-quaere update    # check for a newer release on GitHub
-quaere version   # print the CLI version
+npx quaere-cli list               # show installed skills and the recorded version
+npx quaere-cli doctor             # validate frontmatter, names, and line budgets
+npx quaere-cli update             # check GitHub Releases for a newer version
 ```
 
-See [`CHANGELOG.md`](CHANGELOG.md) for the per-version change history; the `Unreleased` section is the next-up shipping list.
+Substitute `quaere` for `npx quaere-cli` once you have installed globally.
 
-The CLI behavior contracts are documented in [`docs/cli-contracts.md`](docs/cli-contracts.md).
+Releases ship with npm provenance attestations (Sigstore OIDC) binding the tarball back to the release workflow at the exact tag. `npm audit signatures` verifies the chain end to end.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the per-version change history; the `Unreleased` section is the next-up shipping list. The CLI behavior contracts are documented in [`docs/cli-contracts.md`](docs/cli-contracts.md).
 
 ## Examples
 
@@ -206,15 +179,23 @@ See [`docs/evaluation.md`](docs/evaluation.md) for measurement notes and [`evals
 
 ## Contributing
 
-Run the local validator before publishing changes:
+Run the skills validator before publishing changes:
 
 ```bash
 python scripts/validate_skills.py
 ```
 
-The validator checks frontmatter, directory / name consistency, README coverage, line-count budget, and accidental `.agent-state/` inclusion. GitHub Actions runs the same validation on push and pull request, alongside the Rust-side `quaere doctor` parity check.
+It checks frontmatter, directory/name consistency, README coverage, line-count budget, and accidental `.agent-state/` inclusion. GitHub Actions runs the same validation on push and pull request.
 
-For Rust changes under `cli/`, run `cargo fmt --manifest-path cli/Cargo.toml`, `cargo build`, and `cargo test` before committing. The CI `fmt` gate is strict.
+For changes under `cli/` (the npm package), run the local check pipeline before committing:
+
+```bash
+cd cli
+pnpm install --frozen-lockfile
+pnpm check                        # oxlint + tsc --noEmit + vitest
+```
+
+The same pipeline runs in CI before publish, so a failing check there will hold the release.
 
 ## License
 
