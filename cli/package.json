@@ -1,7 +1,7 @@
 {
   "name": "quaere-cli",
   "version": "0.4.1",
-  "description": "Install Quaere process-correction skills for Claude Code and Codex",
+  "description": "Install Quaere process-correction skills for Claude Code and Codex CLI",
   "type": "module",
   "bin": {
     "quaere-cli": "dist/cli.mjs",

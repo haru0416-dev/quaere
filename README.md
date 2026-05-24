@@ -8,7 +8,7 @@
 
 Coding agents rarely fail by saying "I do not know." They fail by sounding finished too early: they skim code, accept plausible claims, patch a wide diff, and report success before the cause is proven.
 
-Quaere is five [skills](https://docs.claude.com/en/docs/claude-code/skills) for Claude Code, Codex, and other skill-aware coding agents. A skill is a markdown file the agent loads on demand based on task context — Quaere ships five, each one gating a different drift point: read the code semantically, ground external facts, prove claims, execute changes in small verified steps, and audit security properties before publishing findings.
+Quaere is five [skills](https://docs.claude.com/en/docs/claude-code/skills) for Claude Code, Codex CLI, and other skill-aware coding agents. A skill is a markdown file the agent loads on demand based on task context — Quaere ships five, each one gating a different drift point: read the code semantically, ground external facts, prove claims, execute changes in small verified steps, and audit security properties before publishing findings.
 
 > Quaere is an independent project, not affiliated with or endorsed by Anthropic. The skills run through Claude Code's and Codex CLI's built-in skill systems.
 
