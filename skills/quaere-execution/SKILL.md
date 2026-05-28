@@ -26,6 +26,17 @@ This is not a paperwork rule. Implementation drift usually happens after the edi
 - Unclear bugs, flaky tests, risky review claims, security-sensitive causes, or production-side effects whose cause is not confirmed; use `quaere-evidence` or `quaere-audit` first.
 - Current SDK/API/CLI behavior that has not been anchored; use `quaere-grounding` first.
 
+## Handoff triggers (when to switch out)
+
+Stop and hand off when the blocker is no longer implementation:
+
+- Cause of a failing test or regression is unclear → `quaere-evidence`.
+- Implementation depends on current SDK / API / CLI / cloud / advisory behavior that is not yet anchored → `quaere-grounding`.
+- Existing module intent or invariants are unclear → `quaere-semantic`.
+- Security properties or auth / tenancy / parser / concurrency / crypto / payment / sandbox risks come up → `quaere-audit` before patching beyond a confirmed fix.
+
+The standard handoff payload (Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition) is documented at the end of this file under "Handoff to other skills".
+
 ## Core model
 
 ```text
@@ -212,59 +223,11 @@ This is the same structure the worked example uses. There is no separate report 
 
 ## Worked example
 
-**Input** (from `eval-fixtures/authorized-implementation-loop/`):
-
-- `PLAN.md` — two TODOs: (1) make `calculate_total(items)` apply each `item["quantity"]`; (2) keep empty carts returning `0` and run the full suite. Commit only after checks pass. Do not push.
-- `src/cart.py` — current `calculate_total` sums prices but ignores `quantity`.
-- `tests/test_cart.py` — `test_calculate_total_uses_quantity` (currently failing) and `test_empty_cart_returns_zero` (currently passing).
-
-User prompt: "Implement the approved TODO list, run targeted tests as you go, run the full suite at the end, review the diff, and commit if everything passes."
-
-### Bad output (edit-first)
-
-```text
-I updated cart.py and committed everything.
-```
-
-Why this fails: no contract restated, no unit plan, no prediction, no pre-fix targeted run that proves the test was failing for the named reason, no diff review, no commit hash/message. The "everything" claim is unverifiable; an agent producing this output might have also touched unrelated files, renamed `calculate_total`, or pushed without authorization.
-
-### Good output
-
-```text
-Contract
-- Authorized: implement TODOs in PLAN.md and commit only if checks pass.
-- Push: NOT authorized. The commit stays local until further instruction.
-- Success criteria: tests/test_cart.py::CartTests.test_calculate_total_uses_quantity passes (currently failing); tests/test_cart.py::CartTests.test_empty_cart_returns_zero remains passing; full suite (python -m unittest discover tests) is green; diff is limited to src/cart.py.
-
-Plan
-- Unit 1: change calculate_total in src/cart.py to multiply price by quantity per item. Reason: PLAN.md TODO #1. Prediction: test_calculate_total_uses_quantity goes from fail to pass; test_empty_cart_returns_zero still passes (sum over an empty iterable is 0). Check: python -m unittest tests.test_cart.CartTests.test_calculate_total_uses_quantity.
-- Unit 2: confirm empty-cart path is unchanged and run the full suite. Reason: PLAN.md TODO #2. Prediction: full discover run is green. Check: python -m unittest discover tests.
-
-Study
-- Unit 1 targeted check (before edit): FAIL — test_calculate_total_uses_quantity expected 35, got 15. This confirms the test is failing for the named reason (quantity ignored), not for an unrelated cause.
-- Unit 1 targeted check (after edit): PASS — test_calculate_total_uses_quantity returns 35.
-- Unit 2 targeted check: PASS — `python -m unittest tests.test_cart.CartTests.test_empty_cart_returns_zero` still passes.
-- Diff review: src/cart.py only; the `return sum(...)` line changed; no unrelated files; no rename of `calculate_total`.
-- Final gate: PASS — `python -m unittest discover tests` shows 2/2 tests passing; test_empty_cart_returns_zero unchanged.
-
-Commit
-- abc1234 Apply quantity in calculate_total per PLAN.md TODOs
-- Push: not performed (not authorized).
-```
+A bad-output (edit-first) vs good-output (full Contract → Plan → Do → Study → Act) example, applied to a `calculate_total` quantity fix, is at [`references/worked-example.md`](references/worked-example.md). Read it when the loop's section structure feels abstract — it shows what each section actually contains end-to-end.
 
 ## Common drift modes
 
-| Rationalization | What's actually happening |
-| --- | --- |
-| "I'll just make all the edits, then test once." | The work became one unreviewable blob. Split into units so failures identify the responsible change. |
-| "I have two units open at once — I'll close them both at the end." | Two units in flight means a failed check cannot localize to one Reason; the unit boundary disappears. Keep exactly one unit in progress: finish, verify, and review its diff before opening the next. |
-| "The broad suite passed, so the bug is fixed." | The targeted behavior may never have been exercised. A broad suite is a regression net, not proof of the changed behavior. |
-| "This cleanup is nearby and cheap." | Drive-by changes enlarge review and rollback cost. If it is not required by the current unit, leave it out or make a separate authorized unit. |
-| "The reviewer asked for it, so I implemented it." | Review feedback can be ambiguous or wrong. If the claim is unclear, hand it to `quaere-evidence` before coding. |
-| "I know the API shape." | Version-sensitive facts must be grounded. Use `quaere-grounding` before coding against SDK/CLI/API behavior. |
-| "Tests failed, so I'll try another patch." | That is speculative patch stacking. Reproduce, form a hypothesis, and hand off if cause is unclear. |
-| "Commit is part of finishing." | Commit is a side effect that requires explicit authorization; implementation authorization alone is not enough. |
-| "No need to inspect the diff; I wrote it." | Self-generated diffs still drift. The final diff review is the check against accidental scope expansion. |
+Rationalizations that fragment the loop ("I'll just make all the edits, then test once.", "The broad suite passed, so the bug is fixed.", "Commit is part of finishing.", etc.) and the corresponding actual failures are at [`references/anti-patterns.md`](references/anti-patterns.md). Read it when a unit seems to be "done" but the diff or targeted check has not been confirmed.
 
 ## Handoff to other skills
 

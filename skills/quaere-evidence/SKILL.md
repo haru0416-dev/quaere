@@ -63,6 +63,17 @@ The full 10-field Review Claim format (in the Workflow section) applies to Stand
 - Pure code comprehension with no claim to decide; use `quaere-semantic` instead.
 - Version-sensitive external facts whose truth depends on current docs, SDKs, CLIs, APIs, or advisories; hand that sub-claim to `quaere-grounding`, then resume here.
 
+## Handoff triggers (when to switch out)
+
+Hand control to a companion skill when the blocking question shifts. Name the handoff and the reason — do not silently switch.
+
+- A claim depends on a version-sensitive external fact (SDK / CLI / API / advisory / current docs) → `quaere-grounding`. Resume only after the fact is labeled `confirmed` / `version-mismatched` / `stale` / `conflicted` / `inconclusive`.
+- The reviewed code's intent or invariants are unclear before the claim can be evaluated → `quaere-semantic`.
+- A claim is confirmed and implementation is authorized → `quaere-execution`.
+- The work is a property-driven security audit rather than a single claim → defer to `quaere-audit` as coordinator.
+
+The standard handoff payload (Blocking question / Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition) and the per-skill payload details (e.g., the exact fields to include when handing to `quaere-grounding`) are documented at the end of this file under "Handoff to other skills".
+
 ## Core model
 
 ```text
@@ -316,87 +327,11 @@ Handoff
 
 ## Worked example
 
-**Input:**
+A bad-output (confirmation-first patch) vs good-output (Findings → Claims/Hypotheses → Defense → Probes → Decision → Patch → Verification) example, applied to an intermittent reservation-spec failure where the "validation is broken" review claim turns out to be wrong, is at [`references/worked-example.md`](references/worked-example.md). Read it when the full 10-field Review Claim format feels abstract.
 
-```text
-CI is failing in tests/reservation.spec.ts after my branch. A reviewer thinks validation is broken, but the failure only happens sometimes. Investigate and only patch if the claim survives evidence.
-```
+## Common drift modes and anti-patterns
 
-### Bad output (confirmation-first)
-
-```text
-The reviewer is right. I found the reservation validation code and patched the schema to require startTime before endTime. Tests should pass now.
-```
-
-Why this fails: it starts with the reviewer's conclusion, not Findings; it never states what would falsify the validation hypothesis; "sometimes" is a flakiness clue, but no timing/order/environment probe was run. The patch may hide the symptom while leaving the actual race or fixture leak intact.
-
-### Good output (evidence-gated)
-
-```text
-Scope / safety constraints
-- CI failure in tests/reservation.spec.ts only. No production calls.
-
-Findings
-- F-001: Failure is intermittent: 3/10 CI retries fail with "expected 400, got 201". Evidence: CI log job 4821. Limit: no local repro yet.
-- F-002: Validation schema rejects startTime >= endTime. Evidence: src/reservations/schema.ts:42 and unit test schema.spec.ts:17.
-- F-003: The fixture object is module-scoped and test "creates a valid reservation" mutates `sharedReservation.endTime`. Evidence: tests/reservation.spec.ts:12 and :41. Limit: not yet proven to precede the failing case.
-
-Claims / Hypotheses
-- C-001 (review claim): Validation is broken.
-  Claim: the reservation endpoint accepts invalid `startTime >= endTime` payloads.
-  Data/Evidence: intermittent 201 response in reservation.spec.ts (CI job 4821, 3/10 retries).
-  Warrant: if invalid payloads bypass validation, the endpoint returns success instead of 400.
-  Backing: contract — src/reservations/contract.md and schema.spec.ts:17 require HTTP 400 for `startTime >= endTime`.
-  Qualifier: low — F-002 shows direct validation exists; intermittent behavior suggests ordering or shared state.
-  Rebuttal / false-positive reason: validation may be intact, and the failing payload may have been mutated to look invalid only after the request was sent.
-  Suggested probe: log the request body in the failing spec and inspect schema dispatch on the path.
-  Falsifier: captured request body on failed runs is structurally valid (startTime < endTime).
-  Disconfirming probe: P-001 — log the outgoing payload in the failing spec; if it is valid, the validation-broken claim is defeated.
-- H-001: Shared fixture mutation changes the payload before the failing assertion.
-  Based on: F-001, F-003.
-  Prediction: failed runs will show payload.endTime later than startTime in the captured request body.
-  Falsifier: captured request body remains invalid (startTime >= endTime) on failed runs.
-  Disconfirming probe: P-001 — same log as above; if the payload is invalid on failure, the mutation hypothesis is defeated.
-  Alternative: schema dispatcher races on hot-reload of validation rules.
-
-Defense and probes
-- D-001 for C-001: Existing schema and schema unit test are counter-evidence; claim narrowed to endpoint path or fixture path.
-- P-001 disconfirming C-001 / supporting H-001: log the request body in the failing spec. Result: failed runs send a valid endTime; this rejects "validation schema is broken" but does not yet prove the mutation source.
-- P-002 causal probe for H-001: run the failing test alone vs after the mutating test, then deep-clone the fixture per test and repeat 10x. Result: alone = pass; after mutating test = reproduces; cloned fixture = 10/10 pass.
-
-Decision
-- C-001 rejected as stated: validation is not generally broken.
-- H-001 confirmed (necessary contributing factors): the failing observation requires three factors holding together — (a) the mutating test runs before the failing one, (b) the fixture is module-scoped/shared, (c) the failing test reads the mutated `endTime`. Removing any one of the three (e.g., the deep-clone) suppresses the bug; this is necessary-AND not single-root. P-002 isolated all three by varying order, scope, and clone behavior together.
-
-Patch
-- Minimal fix: clone the fixture per test in tests/reservation.spec.ts; do not change validation schema. The fix breaks factor (b) — fixtures are no longer shared at the test boundary — which is the cheapest of the three to invalidate without changing the schema or test ordering contract.
-
-Verification
-- Targeted before patch: reservation.spec.ts repeated 10x = 3/10 fail (matches F-001).
-- Targeted after patch: reservation.spec.ts repeated 10x = 10/10 pass (the original observation is no longer reproducible).
-- Broader: unit suite pass; no other tests reference the previously-shared fixture.
-```
-
-## Common drift modes
-
-| Rationalization | What's actually happening |
-| --- | --- |
-| "This claim looks plausible — I can act." | Plausibility is a prior, not a Defense. Plausible-looking claims still need a source-context contradiction-check (does the existing code already enforce what the claim says is missing?) and an explicit rebuttal before they can survive Decision. |
-| "I found three clues that support this cause." | Supporting clues do not discriminate. Ask what would falsify the cause or distinguish it from the next-best hypothesis. |
-| "The test passed after my patch, so root cause is confirmed." | A green test may be coincidence or symptom masking. The targeted probe should fail for the original cause and pass for the fix, or the claim remains weaker than it sounds. |
-| "This is obviously a single root cause." | Many incidents are combinations. Model contributing factors or AND/OR preconditions when one linear story leaves gaps. |
-| "5 Whys found the cause." | RCA tools generate candidate causes; probes confirm them. A tidy chain without evidence is just a story. |
-| "The claim is too risky to test, so I'll decide from reasoning." | Unsafe probes should become safe substitutes or approval requests. If neither is possible, mark `inconclusive`, not `confirmed`. |
-| "Confidence: high" | Confidence without a qualifier, rebuttal, and disconfirming result is tone, not evidence. State why the evidence should move belief. |
-| "No time for the ledger." | Use challenge-pass mode, but keep the falsifier and decision. The ledger can shrink; the gate cannot disappear. |
-
-## Anti-patterns (each item explains why it fails)
-
-- **Patch-first debugging.** Editing before a falsifiable hypothesis fails because any green result afterward is ambiguous: the patch may fix the root cause, mask the symptom, or merely perturb timing.
-- **Review-comment laundering.** Turning a reviewer's concern into your own confirmed finding fails because consensus is not proof. The concern must survive source context, rebuttal, and probe.
-- **Evidence as decoration.** Listing logs after deciding what they mean fails because the observations were not allowed to change the decision. Findings precede interpretation so counter-evidence can steer the investigation.
-- **Broad suite as proof of cause.** Full tests are valuable regression checks, but they rarely isolate why a bug happened. Use the targeted check to prove the cause/risk, then the broad suite to guard side effects.
-- **Forced certainty.** Some investigations end `inconclusive`. That is a useful result when the alternative is inventing a confident but unsupported patch.
+Confirmation bias rationalizations that slip back in even with the gate loaded ("plausible — I can act", "I found three supporting clues", "test passed after my patch", "Confidence: high" without qualifier/rebuttal, patch-first debugging, review-comment laundering, etc.) and how each one skips the falsifier or defense are at [`references/anti-patterns.md`](references/anti-patterns.md). Read it before promoting a claim to `confirmed`.
 
 ## Handoff to other skills
 

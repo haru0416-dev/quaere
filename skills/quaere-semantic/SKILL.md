@@ -34,6 +34,17 @@ Empirical software-engineering research (Maalej, Tiarks, Roehm & Koschke 2014, *
 - Quick lookups: locate a symbol, list files.
 - Bulk mechanical refactors with no semantic risk.
 
+## Handoff triggers (which skill comes after this one)
+
+Semantic review ends at understanding. If the next step needs a different discipline, invoke the relevant skill rather than continuing to read:
+
+- Implementation is authorized after the review → `quaere-execution`.
+- An external library / SDK / API / CLI behavior the analysis depended on may have changed → `quaere-grounding`.
+- A specific bug hypothesis or review claim needs evidence before patching → `quaere-evidence`.
+- Security properties of the module are now in question → `quaere-audit`.
+
+The full handoff payload format (Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition) and per-skill payload details are documented at the end of this file under "Handoff to other skills".
+
 ## Depth control
 
 Three tiers. Choose by *scope*: how many units, the cost of misreading them, and how the agent will be evaluated. Wall-clock time is a hint for human reviewers; for an LLM agent, the primary signal is the unit count and the breadth of slicing required, not minutes.
@@ -118,53 +129,7 @@ Group units by module / layer / concern. End the review with:
 
 ## Worked example
 
-**Input** (`src/cache.ts`):
-
-```typescript
-class TokenCache {
-  private entries = new Map<string, { value: string; expiry: number }>();
-
-  get(key: string): string | undefined {
-    const entry = this.entries.get(key);
-    if (!entry) return undefined;
-    if (entry.expiry < Date.now()) {
-      this.entries.delete(key);
-      return undefined;
-    }
-    return entry.value;
-  }
-}
-```
-
-### Bad output (paraphrase)
-
-```text
-TokenCache.get @ src/cache.ts:5
-  What:        Looks up an entry, deletes if expired, returns the value.
-  Why:         Caching for performance.
-  Invariants:  Map is non-null.
-  Failure:     Returns undefined on miss.
-  Connections: Used elsewhere.
-```
-
-Why this fails: apply genuine semantic-preserving rewrites — rename `expiry` to `validUntil`, hoist `Date.now()` to `const now = Date.now()`, swap `entry.expiry < Date.now()` to its mirror `Date.now() > entry.expiry` (mirror, not negation: `>=` would change boundary behavior at `expiry == now`) — every line of this Bad analysis still applies unchanged. The agent never engaged the semantics. `Why: caching for performance` is a fabricated guess (no certainty marker, no probe). `Used elsewhere` skips the slice analysis. `Returns undefined on miss` describes the success path, not a failure mode.
-
-### Good output
-
-```text
-TokenCache.get @ src/cache.ts:5
-  What (mechanical):    Look up the key in the map. If a stored entry exists and has not yet expired (eviction triggers when stored expiry is strictly less than the current clock reading; the boundary `expiry == now` returns the value), return the entry's value. Otherwise delete the entry and return undefined.
-  What (domain intent): Single-process TTL cache read with read-time eviction.
-  Why:                  plausible — read-time eviction (vs background sweep) keeps the hot path simple but limits us to single-process.
-                        confident — `expiry` comparison must use the same clock as the writer; no skew tolerance is encoded.
-                        UNKNOWN — probe: `git blame src/cache.ts:11` to confirm whether read-time eviction was deliberate or a leftover from a removed background sweeper.
-  Invariants:           expiry is wall-clock ms; writers and readers share a clock. Map access is single-threaded (no lock taken). Eviction is best-effort: a concurrent reader may observe `entry` after another reader's delete.
-  Failure:              Stale entry returned across machine clock skew (multi-process deployment). Memory growth if a key is written but never re-read — eviction is read-driven, not time-driven. No iteration safety: a caller iterating `entries` while `get` runs would see a concurrent delete (no current caller does, but the type does not forbid it).
-  Connections (←):      `Date.now()` (clock dependency); writes from `set()` and `delete()`; constructor (allocates a fresh Map per instance).
-  Connections (→):      Direct callers (grep): `AuthMiddleware.verify` (rejects on undefined), `RefreshScheduler.shouldRefresh` (returns true on undefined). No cache-invalidation bus; downstream readers never see eviction events.
-```
-
-Operational test verdict: the semantic-preserving rewrites listed above (rename `expiry` → `validUntil`, hoist `Date.now()` to a local, mirror `<` to `>`) do not change any of these seven answers — the mechanical line refers to roles ("the key", "the entry", "the current clock reading"), not literal identifiers. The analysis is anchored on what the code *means*, not on how it is *spelled*.
+A side-by-side bad-output (paraphrase) vs good-output (seven-field analysis under the operational test) example, applied to `TokenCache.get`, is at [`references/worked-example.md`](references/worked-example.md). Load it when the contract feels abstract — it shows what the rewrite test actually catches.
 
 ## Probes for `Why`
 
@@ -182,31 +147,9 @@ When the reason for code's shape is unclear, in this order:
    - What is the reachability — who can reach this code and under what conditions?
 6. **As a last resort, ask the user.** Better one question than a fabricated explanation.
 
-## Common drift modes
+## Common drift modes and anti-patterns
 
-Even with this skill loaded, agents drift in recognizable ways. The first column is the rationalization the agent produces; the second is what is actually happening.
-
-| Rationalization | What's actually happening |
-| --- | --- |
-| "The code is short and obvious, no semantic work needed." | Trivial-looking accessors and pure-looking functions carry the subtlest invariants (hidden caller discipline, accidental global reads). Run the operational test before declaring obvious. |
-| "Why is unclear, but it's probably backward-compatibility." | The agent filled `Why` with a guess. Backward-compatibility is the most common fabrication. Mark `UNKNOWN — probe: git blame` and continue. |
-| "Connections: used elsewhere." | The slice analysis was skipped. Both backward (←) and forward (→) slices must name concrete callers, state references, or environment dependencies. |
-| "Invariants: types enforce this." | Some invariants are types; many are not (caller discipline, ordering, freshness, lock state, transaction boundary). Enumerate the non-type invariants explicitly or write `none beyond types — verified by: <test or argument>`. |
-| "What and Why are the same idea expressed differently." | If both fields can be filled with the same sentence, the analysis is paraphrase. `What` is mechanical or domain behavior; `Why` is the constraint that justifies the chosen behavior. They cannot be substituted. |
-| "I covered the major units; minor ones are not interesting." | Skipped units carry implicit contracts. Either cover them or write `skipped because: <reason>`. The unmarked skip is the drift. |
-| "Operational test passed because nothing seems to break." | The test is *whether the rewrite would change the analysis*, not whether the rewrite would compile. If the analysis is so vague that no rewrite could perturb it, the analysis is too shallow. |
-
-## Anti-patterns (each item explains why it fails)
-
-- **Paraphrasing code as prose.** "This function loops over items and checks each one" describes mechanics in different words. Paraphrase fails because it produces no falsifiable claim about behavior — a semantic-preserving rewrite cannot break what was never asserted. The operational test exists to surface this failure cheaply.
-
-- **Inventing intent to fill `Why`.** Plausible-sounding explanations are exactly what the certainty marker is designed to surface. `UNKNOWN — probe: <step>` is more useful than a confident wrong answer; the probe converts uncertainty into a tractable next action. Inventing intent fails because future readers (including the same agent in a later session) treat fabricated `Why` as ground truth and build subsequent edits on it.
-
-- **Skipping units that look obvious.** Accessors that secretly mutate, "pure" functions that depend on globals, branches that exist only for a single legacy caller — all fail this filter. Skipping fails because the skipped units are precisely where invariants live without enforcement; the seven-field structure exists to surface them.
-
-- **Producing analysis and editing immediately.** This skill ends at understanding; implementation is a separate step the user must authorize. Editing during the review fails on two grounds. *Comprehension*: the analysis is no longer a frozen artifact, so a question raised by the edit ("does this still preserve the lock-state invariant we just identified?") cannot consult a stable reference — the agent ends up re-paraphrasing instead of consulting. *Workflow*: it merges two authorization scopes (review vs change), and any drift in the diff cannot be traced to a recorded invariant. Hand off to `quaere-execution` instead.
-
-- **Compressing output to seem efficient.** The user accepted the cost when invoking this skill (see *Industry baseline* — full comprehension is the deliberate exception). Compression fails because the deliverable *is* the analysis; a terser review is just paraphrase wearing different formatting.
+Drift modes (the rationalization vs the actual failure) and the recurring shapes that look like analysis but are paraphrase — including why each fails — are at [`references/anti-patterns.md`](references/anti-patterns.md). Read it when an analysis "passed the operational test" but still feels thin.
 
 ## Handoff to other skills
 
