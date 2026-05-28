@@ -10,7 +10,7 @@ declare const __VERSION__: string
 const installCommand = defineCommand({
   meta: {
     name: 'install',
-    description: 'Install skills to ~/.claude/skills and/or ~/.agents/skills',
+    description: 'Install the core skills (and optionally extensions) to ~/.claude/skills and/or ~/.agents/skills',
   },
   args: {
     agent: {
@@ -22,6 +22,14 @@ const installCommand = defineCommand({
       type: 'boolean',
       description: 'Force reinstall even if already up to date',
     },
+    extensions: {
+      type: 'boolean',
+      description: 'Install all extension skills alongside the core set',
+    },
+    skill: {
+      type: 'string',
+      description: 'Install a named extension alongside the core set (repeatable, e.g. --skill audit)',
+    },
   },
   async run({ args }) {
     const agentArg = args.agent
@@ -30,7 +38,9 @@ const installCommand = defineCommand({
       process.exit(2)
     }
     const agent = (agentArg as Agent | undefined) ?? 'auto'
-    await runInstall(agent, { force: args.force })
+    const skillArg = args.skill
+    const skills = skillArg ? (Array.isArray(skillArg) ? skillArg : [skillArg]) : undefined
+    await runInstall(agent, { force: args.force, extensions: args.extensions, skills })
   },
 })
 
