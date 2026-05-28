@@ -27,6 +27,17 @@ This is the security version of evidence-gating. Dangerous APIs, scary strings, 
 - General maintainability review, one-line known fixes, or shallow checklist-only reviews.
 - Any task whose rules of engagement are missing and probing could affect third-party or production systems; stop and ask.
 
+## Handoff triggers (which skill comes after this one)
+
+Audit coordinates other skills; hand off when the blocking question is not security-property mapping:
+
+- Code intent, invariants, failure modes, or downstream connections are unclear → `quaere-semantic`.
+- Current specs / CVEs / advisories / docs / cloud behavior / framework guidance / CLI behavior / bounty rules must be anchored → `quaere-grounding`.
+- A subtle / disputed / security-sensitive candidate finding still needs proof before being confirmed → `quaere-evidence`.
+- Safe PoC, regression test, or authorized fix is the next step → `quaere-execution`.
+
+The standard handoff payload (Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition) is documented at the end of this file under "Coordination with other skills".
+
 ## Core model
 
 ```text
@@ -222,56 +233,11 @@ Tier does not override external-fact freshness. Even in Triage, if a finding rel
 
 ## Worked example
 
-**Input:**
-
-```text
-Triage-audit only POST /api/invoices/export for tenant isolation. Do not broaden into the whole billing module.
-```
-
-### Bad output (pattern-only)
-
-```text
-Confirmed IDOR: the endpoint accepts invoiceId from the request. Fix by checking ownership.
-```
-
-Why this fails: accepting an ID is not a vulnerability by itself. The output has no tenant-isolation property, no reachable attacker path, no caller/middleware guard check, no impact evidence, and no disconfirming pass.
-
-### Good output
-
-```text
-Scope / ROE
-- Target: POST /api/invoices/export only. Tier: Triage. No live requests.
-
-Property Ledger
-- P-001 Authorization Rule: authenticated user U may export invoice I only if I.organization_id is in U.allowed_organization_ids, including background render job.
-
-Attack Surface / Threat Path
-- Source: tenant user controls invoiceId in POST body.
-- Boundary: API route -> export service -> render job.
-- Sink/guard: invoice lookup before tenant guard; render job reads invoice PDF bytes.
-
-Proof / Gates
-- Evidence: route loads `Invoice.find(id)` before `authorizeInvoice(user, invoice)`; render job receives invoice object without tenant context.
-- Disconfirming probe: checked middleware and `authorizeInvoice` callers; middleware authenticates user but does not constrain invoiceId; no DB row-level policy in this path.
-- Gates: reachable yes; attacker controls invoiceId yes; existing guard missing on export path; in-scope yes; impact cross-tenant invoice disclosure; repro via local request fixture only.
-
-Decision
-- confirmed at Triage for this single-invoice path if no broader exposure is found.
-- Promotion check: if the same missing guard permits bulk export, organization-wide enumeration, or mass-tenant data exposure, promote to Standard before final confirmed report.
-```
+A bad-output (pattern-only IDOR claim) vs good-output (Scope → Property Ledger → Attack Surface → Proof → Decision) example, applied to a `POST /api/invoices/export` triage, is at [`references/worked-example.md`](references/worked-example.md). Read it when "Tier ↔ proof depth" feels abstract.
 
 ## Common drift modes
 
-| Rationalization | What's actually happening |
-| --- | --- |
-| "This dangerous function is present, so it's a vulnerability." | Dangerous APIs are leads. Prove attacker source, boundary crossing, failed guard/sink, and impact. |
-| "It's OWASP Top 10 / CWE, so it's confirmed." | Taxonomy is classification, not proof. Evidence and gates decide the finding. |
-| "The PoC would be convincing, so I'll run it." | Unauthorized or production-like PoCs can cause harm. Use safe substitutes or ask. |
-| "This is only Triage, so I can mark it confirmed quickly." | Triage still requires four conditions. High-blast-radius findings promote to Standard. |
-| "No guard in this function means no guard exists." | Guards often live in middleware, callers, decoders, DB constraints, protocol layers, or deployment config. Check compensating controls. |
-| "A scanner reported it." | Tool output is a candidate. Manual reachability, attacker control, impact, and false-positive gates still apply. |
-| "Severity is obvious." | Severity depends on exploitability, privileges, interaction, exposure, blast radius, and environment. State the basis. |
-| "I covered the main route." | Alternate entrypoints, background jobs, imports, deserializers, and migrations often bypass primary-path guards. Name uncovered risk if not checked. |
+Audit-side rationalizations ("Dangerous function is present, so it's a vulnerability.", "OWASP / CWE classification, so it's confirmed.", "Scanner reported it.", etc.) and what each actually skips are at [`references/anti-patterns.md`](references/anti-patterns.md). Read it before promoting a candidate finding to `confirmed`.
 
 ## Coordination with other skills
 
