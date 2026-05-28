@@ -9,6 +9,26 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 SKILLS_DIR = ROOT / "skills"
+SKILL_GROUPS = ("core", "extensions")
+
+
+def _skill_dir(skill: str) -> Path:
+    """Locate a skill directory under skills/core/ or skills/extensions/."""
+    for group in SKILL_GROUPS:
+        candidate = SKILLS_DIR / group / skill
+        if candidate.is_dir():
+            return candidate
+    raise FileNotFoundError(f"skill {skill!r} not found under {SKILL_GROUPS}")
+
+
+def _all_skill_names() -> list[str]:
+    names: list[str] = []
+    for group in SKILL_GROUPS:
+        group_dir = SKILLS_DIR / group
+        if not group_dir.is_dir():
+            continue
+        names.extend(p.name for p in group_dir.iterdir() if p.is_dir())
+    return sorted(names)
 
 
 def _load_golden(skill: str) -> dict:
@@ -17,7 +37,7 @@ def _load_golden(skill: str) -> dict:
 
 
 def _skill_text(skill: str) -> str:
-    return (SKILLS_DIR / skill / "SKILL.md").read_text(encoding="utf-8")
+    return (_skill_dir(skill) / "SKILL.md").read_text(encoding="utf-8")
 
 
 class SkillGoldenTest(unittest.TestCase):
@@ -85,7 +105,7 @@ class SkillGoldenTest(unittest.TestCase):
         self._check_skill("quaere-audit")
 
     def test_every_skill_has_a_golden(self) -> None:
-        skill_dirs = sorted(p.name for p in SKILLS_DIR.iterdir() if p.is_dir())
+        skill_dirs = _all_skill_names()
         golden_files = sorted(p.stem for p in GOLDEN_DIR.glob("*.json"))
         self.assertEqual(
             skill_dirs,

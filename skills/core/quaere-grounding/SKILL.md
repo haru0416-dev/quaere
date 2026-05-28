@@ -45,7 +45,7 @@ Once the external fact is labeled, hand off to the skill that uses it:
 
 - Implementation is the next step → `quaere-execution` with `Use / Do not use / Verification needed` constraints and the probe results that confirmed each one.
 - A bug cause, review comment, CI failure, or security claim still needs proof using the grounded facts → `quaere-evidence`.
-- The grounded facts are advisories / CVEs / deprecation notices feeding a property-driven audit → `quaere-audit`.
+- The grounded facts are advisories / CVEs / deprecation notices feeding a property-driven audit → if the `quaere-audit` extension is installed, hand off to it; otherwise pass the grounded facts back with a flag that a security audit is needed.
 - The blocking question turned out to be code intent rather than external facts → `quaere-semantic`.
 
 The standard handoff payload (Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition) is documented at the end of this file under "Handoff to other skills".
@@ -244,7 +244,7 @@ Handoff
 - Blocking question: <what external fact could not be confirmed here>
 - Confirmed inputs: <claims reaching "confirmed" status — safe to use as implementation constraints>
 - Inconclusive inputs: <locally observed / inconclusive / version-mismatched / stale facts — not safe to use as true>
-- Required next skill: <quaere-evidence | quaere-execution | quaere-audit | quaere-semantic>
+- Required next skill: <quaere-evidence | quaere-execution | quaere-semantic | (quaere-audit, if the extension is installed)>
 - Stop condition: <what the next skill must do with the confirmed / inconclusive facts>
 ```
 
@@ -252,7 +252,7 @@ When implementation is next, hand off to `quaere-execution` with `Use / Do not u
 
 When a bug cause, review comment, CI failure, or security claim still needs proof, hand off to `quaere-evidence` with the confirmed external facts and the unresolved claims, naming which probes gave inconclusive results and what would resolve them.
 
-When the grounded facts are security advisories, CVEs, deprecation notices, or vendor security guidance that feed a property-driven audit, hand off to `quaere-audit` with the affected version ranges, the lateral-corroboration evidence, and the threat-model frame the advisories assume.
+When the grounded facts are security advisories, CVEs, deprecation notices, or vendor security guidance that feed a property-driven audit, hand off to the `quaere-audit` extension (if installed) with the affected version ranges, the lateral-corroboration evidence, and the threat-model frame the advisories assume. If the extension is not installed, return the grounded facts with a flag that a security audit is needed and escalate to the user.
 
 When code intent — not external facts — is the blocking question, hand off to `quaere-semantic` for the units whose analysis depends on the external behavior. Do not paraphrase code as if it were external claim.
 

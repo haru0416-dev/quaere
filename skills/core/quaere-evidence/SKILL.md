@@ -70,7 +70,7 @@ Hand control to a companion skill when the blocking question shifts. Name the ha
 - A claim depends on a version-sensitive external fact (SDK / CLI / API / advisory / current docs) → `quaere-grounding`. Resume only after the fact is labeled `confirmed` / `version-mismatched` / `stale` / `conflicted` / `inconclusive`.
 - The reviewed code's intent or invariants are unclear before the claim can be evaluated → `quaere-semantic`.
 - A claim is confirmed and implementation is authorized → `quaere-execution`.
-- The work is a property-driven security audit rather than a single claim → defer to `quaere-audit` as coordinator.
+- The work is a property-driven security audit rather than a single claim → if the `quaere-audit` extension is installed, defer to it as coordinator; otherwise flag the task as needing a security audit and escalate to the user.
 
 The standard handoff payload (Blocking question / Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition) and the per-skill payload details (e.g., the exact fields to include when handing to `quaere-grounding`) are documented at the end of this file under "Handoff to other skills".
 
@@ -343,7 +343,7 @@ Handoff
 - Blocking question: <what cannot be decided within this skill's scope>
 - Confirmed inputs: <findings, claims, and decisions safe to carry forward>
 - Inconclusive inputs: <claims or facts not safe to treat as true>
-- Required next skill: <quaere-grounding | quaere-semantic | quaere-execution | quaere-audit>
+- Required next skill: <quaere-grounding | quaere-semantic | quaere-execution | (quaere-audit, if the extension is installed)>
 - Stop condition: <what the next skill must return before this investigation can resume>
 ```
 
@@ -352,7 +352,7 @@ Hand control to a companion skill when the blocking question shifts. Name the ha
 - A claim or hypothesis depends on a version-sensitive external fact (SDK, CLI, API, advisory, current docs) → invoke `quaere-grounding` with the unconfirmed external claim, local anchor if known, source/context already read, and the implementation decision blocked by it. Resume only after the fact is labeled `confirmed` / `version-mismatched` / `stale` / `conflicted` / `inconclusive`.
 - The reviewed code's intent or invariants are unclear before the claim can be evaluated → invoke `quaere-semantic` for the relevant unit, then return with `What (mechanical) / What (domain intent) / Why / Invariants / Failure / Connections` filled in.
 - A claim is confirmed and implementation is authorized → invoke `quaere-execution` with the confirmed claim, patch target, invariants to preserve, and verification commands.
-- The work is a property-driven security audit rather than a single claim → defer to `quaere-audit` as coordinator and provide it the active Findings/Claims and probes already run.
+- The work is a property-driven security audit rather than a single claim → if the `quaere-audit` extension is installed, defer to it as coordinator and provide it the active Findings/Claims and probes already run; otherwise flag the task as needing a security audit and escalate to the user.
 
 When handing off to `quaere-grounding`, spell the next skill name exactly as `quaere-grounding` (lowercase, hyphenated) and include this payload:
 

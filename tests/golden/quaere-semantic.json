@@ -1,13 +1,14 @@
 {
-  "max_lines": 500,
+  "max_lines": 230,
   "required_sections": [
     "^## Iron Law$",
     "^## When to use$",
     "^## When NOT to use$",
+    "^## Handoff triggers",
     "^## Core procedure$",
     "^## Output format$",
     "^## Worked example$",
-    "^## Common drift modes$",
+    "^## Common drift modes",
     "^## Handoff to other skills$",
     "^## Stop condition$"
   ],
