@@ -2,16 +2,28 @@ import { cpSync, existsSync, mkdirSync, renameSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { mergeManifest, readManifest, writeManifest } from '../lib/manifest.js'
 import { Agent, resolveTargetDirs } from '../lib/paths.js'
-import { getBundledSkills } from '../lib/skills.js'
+import { resolveSkillSelection } from '../lib/skills.js'
 
 declare const __VERSION__: string
 
 export interface InstallOptions {
   force?: boolean
+  extensions?: boolean
+  skills?: string[]
 }
 
 export async function runInstall(agent: Agent, opts: InstallOptions = {}): Promise<void> {
-  const skills = getBundledSkills()
+  const { selected: skills, unknownExtensions } = resolveSkillSelection({
+    includeExtensions: opts.extensions,
+    selectExtensions: opts.skills,
+  })
+
+  if (unknownExtensions.length > 0) {
+    console.error(`error: unknown extension skill(s): ${unknownExtensions.join(', ')}`)
+    console.error('Run `quaere list` to see available extensions.')
+    process.exit(2)
+  }
+
   if (skills.length === 0) {
     console.error('error: no bundled skills found — package may be corrupted')
     process.exit(1)
