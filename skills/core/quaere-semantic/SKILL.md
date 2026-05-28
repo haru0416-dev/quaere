@@ -41,7 +41,7 @@ Semantic review ends at understanding. If the next step needs a different discip
 - Implementation is authorized after the review → `quaere-execution`.
 - An external library / SDK / API / CLI behavior the analysis depended on may have changed → `quaere-grounding`.
 - A specific bug hypothesis or review claim needs evidence before patching → `quaere-evidence`.
-- Security properties of the module are now in question → `quaere-audit`.
+- Security properties of the module are now in question → flag it as needing a security audit. If the `quaere-audit` extension is installed, hand off to it; otherwise stop and escalate the security risk to the user rather than guessing.
 
 The full handoff payload format (Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition) and per-skill payload details are documented at the end of this file under "Handoff to other skills".
 
@@ -161,7 +161,7 @@ Handoff
 - Blocking question: <what cannot be resolved through code reading alone>
 - Confirmed inputs: <What/Why/Invariants/Failure/Connections fields that can be carried forward as facts>
 - Inconclusive inputs: <Why claims marked "plausible" or "UNKNOWN" — not safe to treat as confirmed>
-- Required next skill: <quaere-grounding | quaere-evidence | quaere-execution | quaere-audit>
+- Required next skill: <quaere-grounding | quaere-evidence | quaere-execution | (quaere-audit, if the extension is installed)>
 - Stop condition: <what the next skill must return before implementation or deeper audit can proceed>
 ```
 
@@ -172,7 +172,7 @@ Each handoff carries a payload. The structured `quaere-execution` block below is
 - Implementation is authorized after the review → invoke `quaere-execution` with the relevant units, invariants to preserve, risk hotspots, and the suggested first implementation unit.
 - An external library, SDK, API, or CLI behavior the review depended on may have changed → invoke `quaere-grounding` with the unconfirmed external claim, the local version anchor (if known), and the units whose analysis depends on it.
 - A specific bug hypothesis or review claim emerged from the reading and needs evidence → invoke `quaere-evidence` with the Finding, the supporting/disconfirming probes that would resolve it, and the Why claim it would confirm or refute.
-- Security properties of the module are now in question → invoke `quaere-audit` with the suspected security property, the attack-surface entry point identified during slicing, and the threat-model frame the property assumes.
+- Security properties of the module are now in question → flag it as needing a security audit. If the `quaere-audit` extension is installed, invoke it with the suspected security property, the attack-surface entry point identified during slicing, and the threat-model frame the property assumes; otherwise stop and escalate the security risk to the user.
 
 If the user explicitly asked to understand first and then implement, do not edit during the semantic review itself. End with implementation implications and a handoff block:
 

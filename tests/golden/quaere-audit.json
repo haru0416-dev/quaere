@@ -1,14 +1,15 @@
 {
-  "max_lines": 500,
+  "max_lines": 300,
   "required_sections": [
     "^## Iron Law$",
     "^## When to use$",
     "^## When NOT to use$",
+    "^## Handoff triggers",
     "^## Core model$",
     "^## Workflow$",
     "^## Confirmation Rule$",
     "^## Worked example$",
-    "^## Common drift modes$",
+    "^## Common drift modes",
     "^## Coordination with other skills$",
     "^## Stop conditions$"
   ],

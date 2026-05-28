@@ -132,7 +132,8 @@ def validate_skill(
     if line_count > MAX_SKILL_LINES:
         fail(errors, f"{skill_md}: {line_count} lines exceeds {MAX_SKILL_LINES}-line budget")
 
-    readme_ref = f"skills/{skill_dir.name}"
+    rel = skill_dir.relative_to(SKILLS_DIR)
+    readme_ref = f"skills/{rel.as_posix()}"
     if readme_ref not in readme_text:
         fail(errors, f"README.md: missing reference to {readme_ref}")
 
@@ -230,9 +231,16 @@ def main() -> int:
 
     skill_names: set[str] = set()
     if SKILLS_DIR.is_dir():
-        skill_dirs = sorted(p for p in SKILLS_DIR.iterdir() if p.is_dir())
+        group_dirs = [SKILLS_DIR / group for group in ("core", "extensions")]
+        skill_dirs = sorted(
+            p
+            for group_dir in group_dirs
+            if group_dir.is_dir()
+            for p in group_dir.iterdir()
+            if p.is_dir()
+        )
         if not skill_dirs:
-            fail(errors, "skills/ contains no skill directories")
+            fail(errors, "skills/core and skills/extensions contain no skill directories")
         for skill_dir in skill_dirs:
             skill_names.add(skill_dir.name)
             validate_skill(skill_dir, readme_text, examples_text, scenario_skills, errors)

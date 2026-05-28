@@ -23,7 +23,7 @@ This is not a paperwork rule. Implementation drift usually happens after the edi
 ## When NOT to use
 
 - Trivial one-line edits, typo/format-only changes, pure explanations, or single command requests.
-- Unclear bugs, flaky tests, risky review claims, security-sensitive causes, or production-side effects whose cause is not confirmed; use `quaere-evidence` or `quaere-audit` first.
+- Unclear bugs, flaky tests, risky review claims, security-sensitive causes, or production-side effects whose cause is not confirmed; use `quaere-evidence` first (or the `quaere-audit` extension for property-driven security work, if installed).
 - Current SDK/API/CLI behavior that has not been anchored; use `quaere-grounding` first.
 
 ## Handoff triggers (when to switch out)
@@ -33,7 +33,7 @@ Stop and hand off when the blocker is no longer implementation:
 - Cause of a failing test or regression is unclear → `quaere-evidence`.
 - Implementation depends on current SDK / API / CLI / cloud / advisory behavior that is not yet anchored → `quaere-grounding`.
 - Existing module intent or invariants are unclear → `quaere-semantic`.
-- Security properties or auth / tenancy / parser / concurrency / crypto / payment / sandbox risks come up → `quaere-audit` before patching beyond a confirmed fix.
+- Security properties or auth / tenancy / parser / concurrency / crypto / payment / sandbox risks come up → stop before patching beyond a confirmed fix. If the `quaere-audit` extension is installed, hand off to it; otherwise flag the security risk and escalate to the user.
 
 The standard handoff payload (Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition) is documented at the end of this file under "Handoff to other skills".
 
@@ -239,7 +239,7 @@ Handoff
 - Blocking question: <what blocked implementation — unclear cause, ungrounded fact, or security risk>
 - Confirmed inputs: <units completed, tests passing, diffs reviewed — safe to treat as done>
 - Inconclusive inputs: <units deferred, skipped checks, or open risks — not safe to treat as complete>
-- Required next skill: <quaere-evidence | quaere-grounding | quaere-semantic | quaere-audit>
+- Required next skill: <quaere-evidence | quaere-grounding | quaere-semantic | (quaere-audit, if the extension is installed)>
 - Stop condition: <what the next skill must return before implementation can resume>
 ```
 
@@ -248,7 +248,7 @@ Switch out when the blocker is no longer implementation:
 - Cause of a failing test/regression becomes unclear → `quaere-evidence` with the failing command, Findings, and suspected hypothesis.
 - Implementation depends on current SDK/API/CLI/cloud/advisory behavior → `quaere-grounding` with the unconfirmed external claim and local anchor.
 - Existing module intent/invariants are unclear → `quaere-semantic` with the relevant files/symbols and intended change.
-- Security properties, auth/tenancy/parser/concurrency/crypto/payments/sandbox risks arise → `quaere-audit` before patching beyond a confirmed fix.
+- Security properties, auth/tenancy/parser/concurrency/crypto/payments/sandbox risks arise → stop before patching beyond a confirmed fix. If the `quaere-audit` extension is installed, hand off to it; otherwise flag the security risk and escalate to the user.
 
 Resume only after the companion skill returns an actionable decision, constraint, or invariant.
 
