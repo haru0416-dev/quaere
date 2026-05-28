@@ -61,13 +61,24 @@ Terminal-Bench の `csv-to-parquet` — *「`/app/data.csv` を `/app/data.parqu
 
 ## スキル
 
+Quaere は **コア 4 スキル** と、任意で入れる **拡張** に分かれている。`quaere install`
+はコアだけを入れ、拡張は要求したときだけ入る (`quaere install --extensions`、
+または `quaere install --skill <名前>`)。
+
+### コア (既定でインストール)
+
 | スキル | こういうときに使う | 主なガード |
 | --- | --- | --- |
-| [`skills/quaere-semantic`](skills/quaere-semantic/SKILL.md) | 触る前にコードの意図・不変条件・「なぜこの形なのか」を把握したい | 単位ごとに `What / Why / Invariants / Failure / Connections` を埋めさせ、わからない箇所は「分からない」と明示させる |
-| [`skills/quaere-grounding`](skills/quaere-grounding/SKILL.md) | SDK、API、CLI、クラウド、リリースノートなど、バージョンに敏感な外部事実が絡む | ローカル版を起点に source の質と version-fit を見て、確認できた事実だけを実装制約に昇格させる |
-| [`skills/quaere-evidence`](skills/quaere-evidence/SKILL.md) | 不明な不具合、リスクのある PR レビュー、CI 失敗、flaky テスト、外部 API の挙動など、根拠なしには手を入れたくない | finding → 仮説 / Review Claim → 防御 → 反証プローブ → 判断 → 検証 の順を踏ませる |
-| [`skills/quaere-execution`](skills/quaere-execution/SKILL.md) | 承認済みの多段実装を進める、計画を反映する、レビュー指摘を片付ける | `read → plan → execute → review → fix → verify → commit` を一周させ、commit は明示の承認があるときに限る |
-| [`skills/quaere-audit`](skills/quaere-audit/SKILL.md) | 深いセキュリティ監査、バグバウンティ準備、プロトコル準拠の確認、攻撃可能性の検証 | セキュリティプロパティを先に出し、攻撃面と実装を対応づけ、false-positive のゲートを通したものだけを `confirmed` / `potential` として報告する |
+| [`skills/core/quaere-semantic`](skills/core/quaere-semantic/SKILL.md) | 触る前にコードの意図・不変条件・「なぜこの形なのか」を把握したい | 単位ごとに `What / Why / Invariants / Failure / Connections` を埋めさせ、わからない箇所は「分からない」と明示させる |
+| [`skills/core/quaere-grounding`](skills/core/quaere-grounding/SKILL.md) | SDK、API、CLI、クラウド、リリースノートなど、バージョンに敏感な外部事実が絡む | ローカル版を起点に source の質と version-fit を見て、確認できた事実だけを実装制約に昇格させる |
+| [`skills/core/quaere-evidence`](skills/core/quaere-evidence/SKILL.md) | 不明な不具合、リスクのある PR レビュー、CI 失敗、flaky テスト、外部 API の挙動など、根拠なしには手を入れたくない | finding → 仮説 / Review Claim → 防御 → 反証プローブ → 判断 → 検証 の順を踏ませる |
+| [`skills/core/quaere-execution`](skills/core/quaere-execution/SKILL.md) | 承認済みの多段実装を進める、計画を反映する、レビュー指摘を片付ける | `read → plan → execute → review → fix → verify → commit` を一周させ、commit は明示の承認があるときに限る |
+
+### 拡張 (任意)
+
+| スキル | こういうときに使う | 主なガード |
+| --- | --- | --- |
+| [`skills/extensions/quaere-audit`](skills/extensions/quaere-audit/SKILL.md) | 深いセキュリティ監査、バグバウンティ準備、プロトコル準拠の確認、攻撃可能性の検証 | セキュリティプロパティを先に出し、攻撃面と実装を対応づけ、false-positive のゲートを通したものだけを `confirmed` / `potential` として報告する。`quaere install --skill audit` で導入 |
 
 ## 選び方
 
@@ -83,9 +94,10 @@ quaere-semantic → quaere-grounding → quaere-evidence → quaere-execution
 - 外部事実が変わっていそうなら `quaere-grounding`。
 - 主張や原因仮説、修正案そのものが疑わしいなら `quaere-evidence`。
 - 計画が固まってから `quaere-execution` で diff を作る。
-- 単発の修正ではなく性質と攻撃面から脆弱性を見つけ出す作業なら `quaere-audit`。必要に応じて内部で他の四つを呼び分ける。
 
 小さな変更なら `quaere-execution` の軽量モードで足りる。コードを読むだけの仕事は `quaere-semantic` で完結する。
+
+性質と攻撃面から脆弱性を見つけ出す深いセキュリティ作業には、`quaere-audit` 拡張を入れる (`quaere install --skill audit`)。必要に応じてコア 4 つを内部で呼び分ける。
 
 ### 単独で選ぶ: 主なリスクで決める
 
@@ -97,7 +109,7 @@ quaere-semantic → quaere-grounding → quaere-evidence → quaere-execution
 | 答えが現行 SDK / API / CLI / クラウドの挙動に依存する | `quaere-grounding` | 確認済み制約だけで `quaere-execution`、または食い違いがあれば `quaere-evidence` |
 | バグの原因、CI 失敗、flaky、レビュー指摘が本物か怪しい | `quaere-evidence` | 主張・仮説が confirmed になってから `quaere-execution` |
 | 計画は承認済みで、実装が主作業 | `quaere-execution` | 途中で原因不明や危険な状況に転じたら `quaere-evidence` |
-| 仕様と攻撃面から脆弱性を発見・検証する | `quaere-audit` | 内部で他の四つを必要に応じて呼び分ける |
+| 仕様と攻撃面から脆弱性を発見・検証する | `quaere-audit` (拡張) | 内部でコア 4 つを必要に応じて呼び分ける |
 
 ### 迷ったときの分かれ目
 

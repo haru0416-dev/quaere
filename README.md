@@ -60,13 +60,24 @@ Two behaviors changed. The opening sentence names a verification step before wri
 
 ## Skills
 
+Quaere is **four core skills** plus opt-in **extensions**. `quaere install`
+installs the core set; extensions are installed on request
+(`quaere install --extensions`, or `quaere install --skill <name>`).
+
+### Core (installed by default)
+
 | Skill | Use when | Main safeguard |
 | --- | --- | --- |
-| [`skills/quaere-semantic`](skills/quaere-semantic/SKILL.md) | You need to understand unfamiliar code, module intent, invariants, or why code is shaped a certain way before changing it. | Forces `What / Why / Invariants / Failure modes / Connections` per meaningful unit and marks unknown intent instead of inventing it. |
-| [`skills/quaere-grounding`](skills/quaere-grounding/SKILL.md) | The task depends on external, version-sensitive facts: SDKs, APIs, libraries, CLIs, cloud services, security advisories, changelogs, release notes, or docs. | Anchors local versions, ranks source quality, checks version fit and conflicts, and turns confirmed external facts into implementation constraints. |
-| [`skills/quaere-evidence`](skills/quaere-evidence/SKILL.md) | You are handling unclear bugs, risky PR review, CI failures, flaky tests, security-sensitive changes, database/concurrency changes, external APIs, or claims that need evidence before patching. | Requires findings, hypotheses/claims, defense, disconfirming probes, decisions, verification, and handoff before accepting a fix. |
-| [`skills/quaere-execution`](skills/quaere-execution/SKILL.md) | You are authorized to implement a multi-step coding change, apply a plan, finish review feedback, or turn a specification into working code. | Enforces read → plan → execute → review → fix → verify → commit, with commits only when explicitly authorized. |
-| [`skills/quaere-audit`](skills/quaere-audit/SKILL.md) | You are doing deep security auditing, bug bounty preparation, protocol conformance checking, exploitability analysis, or specification-grounded vulnerability discovery. | Derives explicit security properties, maps attack surfaces and code, attempts proofs, gates false positives, and reports confirmed/potential/rejected findings with evidence or PoCs. |
+| [`skills/core/quaere-semantic`](skills/core/quaere-semantic/SKILL.md) | You need to understand unfamiliar code, module intent, invariants, or why code is shaped a certain way before changing it. | Forces `What / Why / Invariants / Failure modes / Connections` per meaningful unit and marks unknown intent instead of inventing it. |
+| [`skills/core/quaere-grounding`](skills/core/quaere-grounding/SKILL.md) | The task depends on external, version-sensitive facts: SDKs, APIs, libraries, CLIs, cloud services, security advisories, changelogs, release notes, or docs. | Anchors local versions, ranks source quality, checks version fit and conflicts, and turns confirmed external facts into implementation constraints. |
+| [`skills/core/quaere-evidence`](skills/core/quaere-evidence/SKILL.md) | You are handling unclear bugs, risky PR review, CI failures, flaky tests, security-sensitive changes, database/concurrency changes, external APIs, or claims that need evidence before patching. | Requires findings, hypotheses/claims, defense, disconfirming probes, decisions, verification, and handoff before accepting a fix. |
+| [`skills/core/quaere-execution`](skills/core/quaere-execution/SKILL.md) | You are authorized to implement a multi-step coding change, apply a plan, finish review feedback, or turn a specification into working code. | Enforces read → plan → execute → review → fix → verify → commit, with commits only when explicitly authorized. |
+
+### Extensions (opt-in)
+
+| Skill | Use when | Main safeguard |
+| --- | --- | --- |
+| [`skills/extensions/quaere-audit`](skills/extensions/quaere-audit/SKILL.md) | You are doing deep security auditing, bug bounty preparation, protocol conformance checking, exploitability analysis, or specification-grounded vulnerability discovery. | Derives explicit security properties, maps attack surfaces and code, attempts proofs, gates false positives, and reports confirmed/potential/rejected findings with evidence or PoCs. Install with `quaere install --skill audit`. |
 
 ## Picking a skill
 
@@ -82,9 +93,10 @@ quaere-semantic → quaere-grounding → quaere-evidence → quaere-execution
 - Use `quaere-grounding` when implementation depends on external facts that may have changed.
 - Use `quaere-evidence` when a claim, bug cause, review comment, or proposed fix needs proof.
 - Use `quaere-execution` when it is time to implement the confirmed plan and verify the final diff.
-- Use `quaere-audit` when the task is not just fixing one claim, but discovering or validating vulnerabilities from properties, attack surfaces, and exploitability gates. It coordinates the other four as needed.
 
 A small implementation can use only `quaere-execution` in lightweight mode; a pure code-reading task can stop after `quaere-semantic`; SDK, cloud API, or dependency work can start with `quaere-grounding`.
+
+For deep security work — discovering or validating vulnerabilities from properties, attack surfaces, and exploitability gates — install the `quaere-audit` extension (`quaere install --skill audit`). It coordinates the four core skills as needed.
 
 ### Standalone: match the main risk
 
@@ -96,7 +108,7 @@ Use the first matching row that describes the main risk in the task:
 | The answer depends on current SDK, API, CLI, cloud, advisory, or docs behavior. | `quaere-grounding` | `quaere-execution` with only confirmed constraints, or `quaere-evidence` if facts conflict. |
 | A bug cause, CI failure, flaky test, or review claim might be wrong. | `quaere-evidence` | `quaere-execution` after a claim or hypothesis is confirmed. |
 | The plan is already approved and implementation is the main work. | `quaere-execution` | `quaere-evidence` if the work turns risky or the cause becomes unclear. |
-| The task is to discover or validate vulnerabilities from specs and attack surfaces. | `quaere-audit` | It coordinates `quaere-semantic`, `quaere-grounding`, `quaere-evidence`, and `quaere-execution` as needed. |
+| The task is to discover or validate vulnerabilities from specs and attack surfaces. | `quaere-audit` (extension) | It coordinates `quaere-semantic`, `quaere-grounding`, `quaere-evidence`, and `quaere-execution` as needed. |
 
 ### Tie-breaker
 
