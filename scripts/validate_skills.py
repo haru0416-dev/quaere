@@ -15,6 +15,10 @@ README = ROOT / "README.md"
 EXAMPLES = ROOT / "examples" / "README.md"
 SCENARIOS = ROOT / "evals" / "scenarios.json"
 MAX_SKILL_LINES = 500
+# Codex CLI reads only ~the first 220 lines of a SKILL.md (gpt-5.5); content past
+# that is structurally unread. Reachability-critical anchors must land within a
+# conservative cap so a few lines of drift do not push them out of reach.
+CODEX_READ_CAP = 200
 
 # Required blocks that must appear in specific SKILL.md files.
 # Key: skill directory name. Value: list of (pattern, description) pairs.
@@ -101,6 +105,49 @@ def parse_frontmatter(path: Path, errors: list[str]) -> dict[str, str]:
     return metadata
 
 
+def _first_line_matching(lines: list[str], predicate) -> int | None:
+    for line_no, line in enumerate(lines, start=1):
+        if predicate(line):
+            return line_no
+    return None
+
+
+def check_anchor_positions(skill_md: Path, errors: list[str]) -> None:
+    """Reachability-critical anchors must appear within the Codex read cap."""
+    lines = skill_md.read_text(encoding="utf-8").splitlines()
+
+    iron = _first_line_matching(lines, lambda l: l.startswith("## Iron Law"))
+    handoff = _first_line_matching(lines, lambda l: l.startswith("## Handoff triggers"))
+    for name, line_no in (("Iron Law", iron), ("Handoff triggers", handoff)):
+        if line_no is None:
+            fail(errors, f"{skill_md}: missing reachability anchor: {name}")
+        elif line_no > CODEX_READ_CAP:
+            fail(
+                errors,
+                f"{skill_md}: reachability anchor {name!r} at line {line_no} is past the "
+                f"Codex read cap ({CODEX_READ_CAP}); front-load it",
+            )
+
+    # The stop guardrail is reachable via a compact in-cap "**Stop now" reminder OR
+    # the full "## Stop condition(s)" section landing within the cap.
+    stop_now = _first_line_matching(lines, lambda l: l.lstrip().startswith("**Stop now"))
+    stop_full = _first_line_matching(lines, lambda l: l.startswith("## Stop condition"))
+    stop_candidates = [n for n in (stop_now, stop_full) if n is not None]
+    if not stop_candidates:
+        fail(
+            errors,
+            f"{skill_md}: missing stop guardrail (no '## Stop condition' section and no "
+            f"'**Stop now' reminder)",
+        )
+    elif min(stop_candidates) > CODEX_READ_CAP:
+        fail(
+            errors,
+            f"{skill_md}: stop guardrail first appears at line {min(stop_candidates)}, past the "
+            f"Codex read cap ({CODEX_READ_CAP}); add a compact '**Stop now —' reminder within the "
+            f"first {CODEX_READ_CAP} lines",
+        )
+
+
 def validate_skill(
     skill_dir: Path,
     readme_text: str,
@@ -136,6 +183,8 @@ def validate_skill(
     line_count = len(skill_md.read_text(encoding="utf-8").splitlines())
     if line_count > MAX_SKILL_LINES:
         fail(errors, f"{skill_md}: {line_count} lines exceeds {MAX_SKILL_LINES}-line budget")
+
+    check_anchor_positions(skill_md, errors)
 
     group = skill_dir.parent.name
     if group in ("core", "extensions"):
