@@ -85,6 +85,21 @@ Expected lightweight behavior:
 - Checks caller/middleware authorization before claiming IDOR or data exposure.
 - Stops after the endpoint is classified rather than continuing into broad scanning.
 
+## `quaere-invention`
+
+Prompt:
+
+> Most users drop off before they finish setting up our dev tool. Suggest a non-obvious onboarding approach — not just the standard wizard.
+
+Expected behavior:
+
+- Names the default basin first (the wizard) and why it may be the wrong thing to optimize.
+- Separates hard constraints from soft preferences and forbidden shortcuts.
+- Lists the assumptions that make the default feel inevitable, tagged by kind.
+- Generates candidates with at least four different mutation operators, each naming the broken assumption, mechanism, expected gain, and failure mode.
+- Classifies every candidate with the fixed novelty labels and never self-rates an idea as "truly novel".
+- Designs a kill-probe (not a confirmation test) for the top candidates and hands them off with a stop condition.
+
 ## Combined pipeline
 
 Prompt:
