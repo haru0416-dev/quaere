@@ -50,6 +50,8 @@ Once the external fact is labeled, hand off to the skill that uses it:
 
 The standard handoff payload (Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition) is documented at the end of this file under "Handoff to other skills".
 
+**Stop now — hard stops (full list under "Stop condition" at the end):** never promote a version-sensitive claim to `confirmed` without an executable probe AND a lateral corroborator — label it `inconclusive` and stop; never substitute model memory for a probe; do not hit production endpoints or mutate cloud resources without explicit approval; when network is unavailable, run the no-network fallback then stop rather than guessing.
+
 ## Categories of facts that must be grounded
 
 Inputs that must never be inferred from training memory when they are version-sensitive:

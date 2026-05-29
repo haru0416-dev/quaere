@@ -74,6 +74,8 @@ Default to read-only analysis. Ask first before:
 
 Prefer safe substitutes: local fixtures, sandboxed test environments, dry runs, synthetic inputs, symbolic traces, or code proofs. If a safe repro cannot be produced, record why and classify accordingly; do not run unsafe probes just to strengthen a report.
 
+**Stop now — hard stops (full list under "Stop conditions" at the end):** stay read-only and ask before any unsafe or production-touching probe; never run an unsafe probe just to strengthen a report; do not promote a finding to `confirmed` until it passes the false-positive gates; stop at the iteration budget and hand off rather than looping.
+
 ## Workflow
 
 ### 1. Scope and rules of engagement
