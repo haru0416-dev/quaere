@@ -102,31 +102,12 @@ Do not let bookkeeping become the work. Collapse repeated facts, group related p
 
 ## State files
 
-For durable investigations, create or update only the useful subset of:
-
-```text
-.agent-state/
-  targets/
-    <task-or-issue-slug>/
-      findings.md
-      hypotheses.md
-      review-claims.md
-      defenses.md
-      probes.md
-      session-log.md
-      handoff.md
-```
-
-Use the templates in `templates/`. Do not create all seven files by default; `findings.md`, `probes.md`, and `handoff.md` are often enough. If the user does not want files written, keep the same structure in the response.
-
-### Git handling for state files
-
-Treat `.agent-state/` as local investigation state by default:
-
-- Do not commit `.agent-state/` unless the user explicitly wants the investigation ledger preserved as a project artifact.
-- Prefer adding `.agent-state/` to `.gitignore` when state files are useful but local-only.
-- Before committing, inspect status and ensure no private logs, credentials, production data, or noisy scratch files from `.agent-state/` are staged.
-- If handoff notes are part of the deliverable, ask whether they should live under `.agent-state/`, project docs, an issue/PR comment, or the final response.
+For durable / multi-session investigations, persist a per-target ledger under
+`.agent-state/targets/<slug>/` (`findings.md`, `probes.md`, `handoff.md` are often
+enough). Templates are in `templates/`; the full layout and git-handling rules
+(treat `.agent-state/` as local, do not commit without explicit ask) are in
+[`references/state-files.md`](references/state-files.md). If the user does not want
+files written, keep the same structure in the response.
 
 ## Guardrails
 
@@ -294,37 +275,6 @@ Summarize:
 - confidence shifts and limits
 - next 1–3 recommended probes
 
-## Output expectations
-
-Prefer this structure:
-
-```text
-Scope / safety constraints
-- ...
-
-Findings
-- F-001 ... Evidence: ... Limit: ...
-
-Claims / Hypotheses
-- H-001 ... Based on: ... Prediction: ... Falsifier: ... Disconfirming probe: ... Alternative: ... status: confirmed|rejected|inconclusive|deferred
-- C-001 ... Claim/Data/Warrant/Backing (<source-type>)/Qualifier/Rebuttal/Suggested probe/Falsifier/Disconfirming probe: ... status: ...
-
-Defense and probes
-- D/P IDs, what was checked, what would have disproved it, and result
-
-Decision
-- confirmed/rejected/inconclusive/deferred, with confidence and limits
-
-Patch
-- Minimal files changed and why, or "no patch because ..."
-
-Verification
-- Commands/checks run and results
-
-Handoff
-- Remaining risks and next probes
-```
-
 ## Worked example
 
 A bad-output (confirmation-first patch) vs good-output (Findings → Claims/Hypotheses → Defense → Probes → Decision → Patch → Verification) example, applied to an intermittent reservation-spec failure where the "validation is broken" review claim turns out to be wrong, is at [`references/worked-example.md`](references/worked-example.md). Read it when the full 10-field Review Claim format feels abstract.
@@ -347,21 +297,11 @@ Handoff
 - Stop condition: <what the next skill must return before this investigation can resume>
 ```
 
-Hand control to a companion skill when the blocking question shifts. Name the handoff and the reason in the response — do not silently switch.
-
-- A claim or hypothesis depends on a version-sensitive external fact (SDK, CLI, API, advisory, current docs) → invoke `quaere-grounding` with the unconfirmed external claim, local anchor if known, source/context already read, and the implementation decision blocked by it. Resume only after the fact is labeled `confirmed` / `version-mismatched` / `stale` / `conflicted` / `inconclusive`.
-- The reviewed code's intent or invariants are unclear before the claim can be evaluated → invoke `quaere-semantic` for the relevant unit, then return with `What (mechanical) / What (domain intent) / Why / Invariants / Failure / Connections` filled in.
-- A claim is confirmed and implementation is authorized → invoke `quaere-execution` with the confirmed claim, patch target, invariants to preserve, and verification commands.
-- The work is a property-driven security audit rather than a single claim → if the `quaere-audit` extension is installed, defer to it as coordinator and provide it the active Findings/Claims and probes already run; otherwise flag the task as needing a security audit and escalate to the user.
-
-When handing off to `quaere-grounding`, spell the next skill name exactly as `quaere-grounding` (lowercase, hyphenated) and include this payload:
-
-```text
-Handoff to quaere-grounding
-- Unconfirmed external claim: <SDK/API/CLI/advisory claim, e.g. deprecated/renamed method>
-- Local anchor: <installed version, lockfile, package manifest, or "missing">
-- Blocked decision: <review claim / patch / implementation decision that cannot proceed until the external fact is decided>
-```
+The four handoff triggers (grounding / semantic / execution / audit-extension) are
+listed under "Handoff triggers" near the top. Emit the payload block above when
+switching, and carry the relevant Findings/Claims/probes already run. When handing
+to `quaere-grounding`, include the unconfirmed external claim, the local version
+anchor (or "missing"), and the decision blocked by it.
 
 ## Stop condition
 
