@@ -69,6 +69,8 @@ Do not let the checklist become the work. Scale output down for small tasks, but
 - Do not refactor adjacent code unless the plan or confirmed fix requires it.
 - Do not broaden scope silently. If a larger design decision appears, stop and ask.
 
+**Stop now — hard stops (full list under "Stop condition" at the end):** stop and ask before broadening scope or making a larger design decision; commit or push only when explicitly authorized; do not declare done until the final verification gate passes; stop after the fix-loop budget rather than re-running the same failing check.
+
 ## Workflow
 
 ### 1. Contract

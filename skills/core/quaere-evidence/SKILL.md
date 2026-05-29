@@ -122,6 +122,8 @@ files written, keep the same structure in the response.
 - Always run at least one disconfirming probe for plausible hypotheses or risky review claims; "naming" a probe without running it does not satisfy the gate. **Carve-out for unprobeable claims**: when a hypothesis cannot be probed within the safety budget (production replay, payment flow, destructive operation), substitute a *defended rebuttal* — an explicit attempt to argue the strongest counter-explanation from source-context, tests, advisories, or specification — and label the Decision `confirmed (rebuttal-substituted)` with the rebuttal recorded under Defense. This substitution does not lower the bar; it trades execution evidence for documented-counter-argument evidence.
 - Do not force a single root cause. Some failures require necessary contributing factors or sufficient AND/OR combinations.
 
+**Stop now — hard stops (full list under "Stop condition" at the end):** halt and hand back rather than push past a gate when the investigation budget is spent, when two probes for the same hypothesis come back inconclusive, before any destructive or production-like action, or once a confirmed fix is in hand — do not keep investigating or gold-plate past the confirmed cause.
+
 ## Workflow
 
 ### 0. Scope and symptom chronology
