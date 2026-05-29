@@ -251,10 +251,20 @@ def filter_scenarios(scenarios: list[Scenario], skill: str | None, scenario_ids:
 
 
 def read_skill(skill_name: str, skills_dir: Path) -> tuple[Path, str]:
-    skill_path = skills_dir / skill_name / "SKILL.md"
-    if not skill_path.exists():
-        raise FileNotFoundError(f"missing skill file for {skill_name!r}: {skill_path}")
-    return skill_path, skill_path.read_text(encoding="utf-8")
+    # Skills live under skills/core/ or skills/extensions/ (ADR-0010). Fall back to
+    # the legacy flat skills/<name>/ layout for compatibility.
+    candidates = [
+        skills_dir / "core" / skill_name / "SKILL.md",
+        skills_dir / "extensions" / skill_name / "SKILL.md",
+        skills_dir / skill_name / "SKILL.md",
+    ]
+    for skill_path in candidates:
+        if skill_path.exists():
+            return skill_path, skill_path.read_text(encoding="utf-8")
+    raise FileNotFoundError(
+        f"missing skill file for {skill_name!r}: looked in "
+        f"{', '.join(str(c) for c in candidates)}"
+    )
 
 
 def build_prompt(scenario: Scenario, mode: str, skills_dir: Path) -> str:

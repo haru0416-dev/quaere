@@ -41,6 +41,11 @@ REQUIRED_BLOCKS: dict[str, list[tuple[str, str]]] = {
         ("Verification contract", "Verification contract block"),
         ("## Handoff to other skills", "Handoff to other skills section"),
     ],
+    "quaere-invention": [
+        ("Novelty filter", "Novelty filter step (anti-hype core)"),
+        ("genuinely uncertain", "fixed novelty label set"),
+        ("## Handoff to other skills", "Handoff to other skills section"),
+    ],
 }
 REQUIRED_FIELDS = {"name", "description", "compatibility", "license"}
 KEBAB_CASE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -132,8 +137,11 @@ def validate_skill(
     if line_count > MAX_SKILL_LINES:
         fail(errors, f"{skill_md}: {line_count} lines exceeds {MAX_SKILL_LINES}-line budget")
 
-    rel = skill_dir.relative_to(SKILLS_DIR)
-    readme_ref = f"skills/{rel.as_posix()}"
+    group = skill_dir.parent.name
+    if group in ("core", "extensions"):
+        readme_ref = f"skills/{group}/{skill_dir.name}"
+    else:
+        readme_ref = f"skills/{skill_dir.name}"
     if readme_ref not in readme_text:
         fail(errors, f"README.md: missing reference to {readme_ref}")
 
