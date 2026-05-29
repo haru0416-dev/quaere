@@ -9,6 +9,11 @@
           "name": "falsifier or disconfirming probe required",
           "type": "regex",
           "pattern": "反証|反例|否定する"
+        },
+        {
+          "name": "flaky claim paired with alternative hypothesis",
+          "type": "requires_pair",
+          "must_also_contain": "代替|競合|別の仮説|フィクスチャ|順序|レース|競合状態|共有状態|環境|タイミング|乱数|非同期"
         }
       ]
     },
