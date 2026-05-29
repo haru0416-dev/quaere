@@ -78,6 +78,7 @@ installs the core set; extensions are installed on request
 | Skill | Use when | Main safeguard |
 | --- | --- | --- |
 | [`skills/extensions/quaere-audit`](skills/extensions/quaere-audit/SKILL.md) | You are doing deep security auditing, bug bounty preparation, protocol conformance checking, exploitability analysis, or specification-grounded vulnerability discovery. | Derives explicit security properties, maps attack surfaces and code, attempts proofs, gates false positives, and reports confirmed/potential/rejected findings with evidence or PoCs. Install with `quaere install --skill audit`. |
+| [`skills/extensions/quaere-invention`](skills/extensions/quaere-invention/SKILL.md) | You need a non-obvious approach, alternative architecture, research direction, product or monetization idea, or agent-skill design before committing to a plan. | Forces the agent to name the default basin it is escaping, break assumptions through structured mutation passes, classify novelty honestly with fixed labels (no self-rated "truly novel"), and design a kill-probe before promoting an idea. Install with `quaere install --skill invention`. |
 
 ## Picking a skill
 
@@ -98,6 +99,8 @@ A small implementation can use only `quaere-execution` in lightweight mode; a pu
 
 For deep security work — discovering or validating vulnerabilities from properties, attack surfaces, and exploitability gates — install the `quaere-audit` extension (`quaere install --skill audit`). It coordinates the four core skills as needed.
 
+When the risk is settling on the obvious answer too early — choosing an approach, architecture, or research/product direction before widening the option space — install the `quaere-invention` extension (`quaere install --skill invention`). Chained, it sits between grounding and evidence (`semantic → grounding → invention → evidence → execution`); standalone ideation can run `invention → evidence`.
+
 ### Standalone: match the main risk
 
 Use the first matching row that describes the main risk in the task:
@@ -109,6 +112,7 @@ Use the first matching row that describes the main risk in the task:
 | A bug cause, CI failure, flaky test, or review claim might be wrong. | `quaere-evidence` | `quaere-execution` after a claim or hypothesis is confirmed. |
 | The plan is already approved and implementation is the main work. | `quaere-execution` | `quaere-evidence` if the work turns risky or the cause becomes unclear. |
 | The task is to discover or validate vulnerabilities from specs and attack surfaces. | `quaere-audit` (extension) | It coordinates `quaere-semantic`, `quaere-grounding`, `quaere-evidence`, and `quaere-execution` as needed. |
+| You are about to commit to the obvious approach and want to widen the option space first. | `quaere-invention` (extension) | Hands surviving candidates with kill-probes to `quaere-grounding`, `quaere-evidence`, or `quaere-execution`. |
 
 ### Tie-breaker
 
@@ -119,6 +123,7 @@ If two skills seem plausible, choose the one that answers the blocking question 
 - "Is this claim actually proven?" → `quaere-evidence`
 - "Are we ready to change files?" → `quaere-execution`
 - "What security properties can fail?" → `quaere-audit`
+- "Are we trapped in the obvious solution space?" → `quaere-invention`
 
 ## Installation
 

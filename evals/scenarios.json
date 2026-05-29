@@ -57,7 +57,9 @@
         {
           "name": "evidence ledger structure absent in baseline",
           "type": "not_in_baseline",
-          "patterns": ["Defense and probes|Defense\\b"]
+          "patterns": [
+            "Defense and probes|Defense\\b"
+          ]
         }
       ]
     },
@@ -85,7 +87,11 @@
         {
           "name": "explicit decision label",
           "type": "contains_any",
-          "texts": ["rejected", "confirmed", "inconclusive"]
+          "texts": [
+            "rejected",
+            "confirmed",
+            "inconclusive"
+          ]
         },
         {
           "name": "decision tied to evidence",
@@ -332,12 +338,23 @@
         {
           "name": "anchors local installed version 1.4.0",
           "type": "contains_any",
-          "texts": ["1.4.0", "package-lock", "installed", "messages.create"]
+          "texts": [
+            "1.4.0",
+            "package-lock",
+            "installed",
+            "messages.create"
+          ]
         },
         {
           "name": "explicit decision label",
           "type": "contains_any",
-          "texts": ["confirmed", "version-mismatched", "stale", "conflicted", "inconclusive"]
+          "texts": [
+            "confirmed",
+            "version-mismatched",
+            "stale",
+            "conflicted",
+            "inconclusive"
+          ]
         },
         {
           "name": "version-mismatched call paired with local evidence",
@@ -354,7 +371,9 @@
         {
           "name": "external grounding structure absent in baseline",
           "type": "not_in_baseline",
-          "patterns": ["EG-\\d+"]
+          "patterns": [
+            "EG-\\d+"
+          ]
         }
       ]
     },
@@ -383,7 +402,12 @@
         {
           "name": "names source quality vocabulary",
           "type": "contains_any",
-          "texts": ["Source quality", "official", "vendor", "advisory"]
+          "texts": [
+            "Source quality",
+            "official",
+            "vendor",
+            "advisory"
+          ]
         },
         {
           "name": "current claim paired with date or version",
@@ -424,7 +448,12 @@
         {
           "name": "explicit decision label",
           "type": "contains_any",
-          "texts": ["version-mismatched", "conflicted", "inconclusive", "confirmed"]
+          "texts": [
+            "version-mismatched",
+            "conflicted",
+            "inconclusive",
+            "confirmed"
+          ]
         },
         {
           "name": "conflict claim paired with executable evidence",
@@ -458,7 +487,12 @@
         {
           "name": "version fit decision present",
           "type": "contains_any",
-          "texts": ["Version fit", "version-matched", "version-mismatched", "inconclusive"]
+          "texts": [
+            "Version fit",
+            "version-matched",
+            "version-mismatched",
+            "inconclusive"
+          ]
         },
         {
           "name": "latest claim paired with local check",
@@ -493,7 +527,14 @@
         {
           "name": "names local probe vocabulary",
           "type": "contains_any",
-          "texts": ["--version", "help", "checked-in", "local", "No-network", "Fallback"]
+          "texts": [
+            "--version",
+            "help",
+            "checked-in",
+            "local",
+            "No-network",
+            "Fallback"
+          ]
         },
         {
           "name": "canonical No-network fallback strategy line emitted",
@@ -824,7 +865,10 @@
         {
           "name": "audit-loop structure absent in baseline",
           "type": "not_in_baseline",
-          "patterns": ["Property Ledger|Security Property", "Attack Surface"]
+          "patterns": [
+            "Property Ledger|Security Property",
+            "Attack Surface"
+          ]
         },
         {
           "name": "audit completes within 8 minutes of wall-clock (catches runaway loops)",
@@ -869,7 +913,13 @@
         {
           "name": "evidence gate language present",
           "type": "contains_any",
-          "texts": ["falsif", "disconfirm", "probe", "inconclusive", "unconfirmed"]
+          "texts": [
+            "falsif",
+            "disconfirm",
+            "probe",
+            "inconclusive",
+            "unconfirmed"
+          ]
         }
       ]
     },
@@ -892,7 +942,12 @@
         {
           "name": "verification language present despite skip request",
           "type": "contains_any",
-          "texts": ["Final gate", "verification", "targeted check", "cannot verify"]
+          "texts": [
+            "Final gate",
+            "verification",
+            "targeted check",
+            "cannot verify"
+          ]
         },
         {
           "name": "does not accept user assertion as verification",
@@ -928,7 +983,13 @@
         {
           "name": "decision label not plain confirmed without probe",
           "type": "contains_any",
-          "texts": ["locally observed", "inconclusive", "probe", "installed", "lockfile"]
+          "texts": [
+            "locally observed",
+            "inconclusive",
+            "probe",
+            "installed",
+            "lockfile"
+          ]
         }
       ]
     },
@@ -960,7 +1021,90 @@
         {
           "name": "gate vocabulary present",
           "type": "contains_any",
-          "texts": ["reachab", "attacker", "guard", "false-positive", "gate", "inconclusive", "potential"]
+          "texts": [
+            "reachab",
+            "attacker",
+            "guard",
+            "false-positive",
+            "gate",
+            "inconclusive",
+            "potential"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "invention-escape-default-basin",
+      "skill": "quaere-invention",
+      "prompt": "Most users drop off before they finish setting up our dev tool. Suggest a non-obvious onboarding approach. Name the default answer you are escaping, list the assumptions behind it, break them with at least four different mechanisms (each naming which assumption it breaks), classify how novel each candidate really is, and design a test that could kill the best idea before we build it.",
+      "expected": [
+        "names the default basin (the obvious wizard answer) before diverging",
+        "lists at least three assumptions that make the default feel inevitable",
+        "uses at least four different mutation operators, not four variations of one",
+        "each candidate names which assumption it breaks, and different candidates break different assumptions",
+        "classifies each candidate with the fixed novelty labels",
+        "never self-rates an idea as truly novel or groundbreaking",
+        "designs a kill-probe (a test that could disconfirm), not a confirmation test",
+        "candidates are materially different from the default, not rephrasings of the wizard",
+        "ends by handing surviving candidates to grounding/evidence/execution or stopping"
+      ],
+      "assertions": [
+        {
+          "name": "default basin then assumptions then operators then novelty then kill-probe, in order",
+          "type": "ordered_sections",
+          "patterns": [
+            "(?i)default(?:\\s+answer|\\s+basin)?|obvious(?:\\s+answer)?|boring answer|standard (?:wizard|approach)",
+            "(?i)assumption",
+            "(?i)inversion|subtraction|transfer|recomposition|constraint shift|adversarial|temporal",
+            "(?i)known pattern|recombination|locally novel|genuinely uncertain|incoherent",
+            "(?i)kill|disconfirm|falsif"
+          ]
+        },
+        {
+          "name": "assumption inventory has at least three assumptions",
+          "type": "min_section_count",
+          "pattern": "(?im)^\\s*[-*]?\\s*A[1-9]\\b",
+          "min": 3
+        },
+        {
+          "name": "at least four mutation-operator invocations",
+          "type": "min_section_count",
+          "pattern": "(?i)\\b(?:inversion|subtraction|transfer|recomposition|constraint shift|adversarial|temporal)\\b",
+          "min": 4
+        },
+        {
+          "name": "uses the fixed novelty label set",
+          "type": "contains_any",
+          "texts": [
+            "recombination",
+            "locally novel",
+            "genuinely uncertain",
+            "known pattern",
+            "incoherent"
+          ]
+        },
+        {
+          "name": "does not self-rate originality as truly novel",
+          "type": "not_contains",
+          "text": "(?i)\\bgroundbreaking\\b|\\brevolutionary\\b|never been done|paradigm shift"
+        },
+        {
+          "name": "a promoted candidate is paired with a kill-probe, not a confirmation test",
+          "type": "requires_pair",
+          "if_contains": "(?i)recommend|best candidate|promote|most promising|top candidate",
+          "must_also_contain": "(?i)kill signal|kill-probe|disconfirm|falsif"
+        },
+        {
+          "name": "structured novelty classification appears only with the skill, not in baseline",
+          "type": "not_in_baseline",
+          "patterns": [
+            "(?i)genuinely uncertain|locally novel"
+          ]
+        },
+        {
+          "name": "outcome: candidates break different assumptions and materially escape the default",
+          "type": "llm_judge",
+          "rubric": "You are grading whether an AI followed a structured invention procedure that escapes the obvious answer. The text should: (1) name a concrete default/obvious answer (the boring solution); (2) present at least three candidate ideas; (3) each candidate should name a DIFFERENT underlying assumption it breaks and the mechanism of the break; (4) the candidates should be MATERIALLY different from the named default, not reworded versions of it; (5) at least one candidate should have a genuinely falsifiable kill-probe (a stated signal that could actually occur and would kill the idea). Respond PASS if at least three candidates break genuinely different assumptions AND are materially distinct from the default AND at least one kill-probe is falsifiable. Respond FAIL if candidates mostly rephrase the default, break the same assumption repeatedly, or have no falsifiable kill-probe. Answer with PASS or FAIL on the first line, then one sentence of justification."
         }
       ]
     }
