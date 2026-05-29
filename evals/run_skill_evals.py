@@ -7,6 +7,7 @@ import argparse
 import datetime as dt
 import hashlib
 import json
+import math
 import os
 import re
 import shlex
@@ -63,6 +64,8 @@ class EvalJob:
     prompt: str
     run_dir: Path
     workspace_dir: Path
+    run_index: int = 1
+    total_runs: int = 1
 
 
 def load_scenarios(path: Path, extras_path: Path | None = None) -> list[Scenario]:
@@ -304,8 +307,13 @@ def create_job(
     output_root: Path,
     skills_dir: Path,
     workspace_source: Path | None,
+    run_index: int = 1,
+    total_runs: int = 1,
 ) -> EvalJob:
-    run_dir = output_root / runner.name / scenario.skill / scenario.id / mode
+    cell_dir = output_root / runner.name / scenario.skill / scenario.id / mode
+    # Single-run sweeps keep the flat .../mode/ layout; repeated runs nest each
+    # sample under .../mode/run-NN/ so the per-run artifacts do not clobber.
+    run_dir = cell_dir if total_runs == 1 else cell_dir / f"run-{run_index:02d}"
     workspace_dir = run_dir / "workspace"
     prompt = build_prompt(scenario, mode, skills_dir)
     if workspace_dir.exists():
@@ -325,6 +333,8 @@ def create_job(
         prompt=prompt,
         run_dir=run_dir,
         workspace_dir=workspace_dir,
+        run_index=run_index,
+        total_runs=total_runs,
     )
 
 
@@ -379,6 +389,8 @@ def run_job(
         "scenario_id": job.scenario.id,
         "skill": job.scenario.skill,
         "mode": job.mode,
+        "run_index": job.run_index,
+        "total_runs": job.total_runs,
         "started_at": started.isoformat(),
         "workspace": str(job.workspace_dir),
         "prompt_file": str(prompt_file),
@@ -478,6 +490,7 @@ def grade_output(scenario: Scenario, output: str, metadata: dict[str, Any]) -> d
             {
                 "name": str(assertion.get("name") or assertion.get("type") or "unnamed"),
                 "type": assertion.get("type"),
+                "axis": assertion_axis(assertion),
                 "status": "manual",
                 "detail": "Dry run did not invoke a runner, so output assertions were not evaluated.",
             }
@@ -512,6 +525,8 @@ def grade_output(scenario: Scenario, output: str, metadata: dict[str, Any]) -> d
         )
         for assertion in scenario.assertions
     ]
+    for assertion, result in zip(scenario.assertions, assertion_results):
+        result["axis"] = assertion_axis(assertion)
     manual = [
         {
             "name": item,
@@ -1005,6 +1020,19 @@ def list_of_strings(value: Any) -> list[str]:
     return [item for item in value if isinstance(item, str)]
 
 
+VALID_AXES = {"outcome", "form"}
+
+
+def assertion_axis(assertion: dict[str, Any]) -> str:
+    """Axis an assertion measures: 'outcome' (task resolved / safe) or 'form' (surface shape).
+
+    Defaults to 'form' so untagged assertions never inflate the headline outcome
+    number — opting an assertion into the outcome axis is an explicit author act.
+    """
+    axis = assertion.get("axis", "form")
+    return axis if axis in VALID_AXES else "form"
+
+
 def recompute_grade_status(grade: dict[str, Any]) -> None:
     """Recompute grade status and summary counters from current assertion list."""
     assertion_results = grade.get("assertions", [])
@@ -1040,10 +1068,12 @@ def recompute_grade_status(grade: dict[str, Any]) -> None:
 
 def finalize_cross_mode_assertions(results: list[dict[str, Any]]) -> None:
     """Resolve assertions that need both baseline and with-skill output (e.g. not_in_baseline)."""
-    pairs: dict[tuple[str, str, str], dict[str, dict[str, Any]]] = {}
+    # Key includes run_index so with-skill run i pairs with baseline run i; otherwise
+    # repeated runs would collapse to last-write-wins and mis-pair cross-mode checks.
+    pairs: dict[tuple[str, str, str, int], dict[str, dict[str, Any]]] = {}
     for result in results:
         meta = result["metadata"]
-        key = (meta["runner"], meta["skill"], meta["scenario_id"])
+        key = (meta["runner"], meta["skill"], meta["scenario_id"], meta.get("run_index", 1))
         pairs.setdefault(key, {})[meta["mode"]] = result
 
     for modes in pairs.values():
@@ -1107,6 +1137,128 @@ def finalize_cross_mode_assertions(results: list[dict[str, Any]]) -> None:
                 recompute_grade_status(grade)
 
 
+def _axis_run_status(grade: dict[str, Any], axis: str) -> tuple[bool, bool]:
+    """(applicable, passed) for one run on one axis.
+
+    applicable = the run had >=1 pass/fail assertion on this axis.
+    passed     = applicable and no assertion on this axis failed.
+    """
+    rel = [a for a in grade.get("assertions", []) if a.get("axis", "form") == axis]
+    passed = sum(1 for a in rel if a.get("status") == "pass")
+    failed = sum(1 for a in rel if a.get("status") == "fail")
+    applicable = (passed + failed) >= 1
+    return applicable, applicable and failed == 0
+
+
+def aggregate_cells(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One row per (runner, skill, scenario, mode) with run-level pass-rates."""
+    order: list[tuple[str, str, str, str]] = []
+    cells: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for result in results:
+        meta = result["metadata"]
+        if meta.get("dry_run"):
+            continue
+        key = (meta["runner"], meta["skill"], meta["scenario_id"], meta["mode"])
+        if key not in cells:
+            order.append(key)
+            cells[key] = {
+                "runner": meta["runner"],
+                "skill": meta["skill"],
+                "scenario_id": meta["scenario_id"],
+                "mode": meta["mode"],
+                "runs": 0,
+                "status_pass_runs": 0,
+                "outcome_applicable": 0,
+                "outcome_pass": 0,
+                "form_applicable": 0,
+                "form_pass": 0,
+            }
+        cell = cells[key]
+        cell["runs"] += 1
+        if result["grade"].get("status") == "pass":
+            cell["status_pass_runs"] += 1
+        for axis in ("outcome", "form"):
+            applicable, passed = _axis_run_status(result["grade"], axis)
+            if applicable:
+                cell[f"{axis}_applicable"] += 1
+                if passed:
+                    cell[f"{axis}_pass"] += 1
+    return [cells[key] for key in order]
+
+
+def mcnemar_exact_p(b01: int, b10: int) -> float | None:
+    """Two-sided exact (binomial) McNemar p-value over discordant pairs; None if no discordants."""
+    n = b01 + b10
+    if n == 0:
+        return None
+    k = min(b01, b10)
+    tail = sum(math.comb(n, i) for i in range(k + 1)) * (0.5 ** n)
+    return min(1.0, 2.0 * tail)
+
+
+def build_pairs(results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Paired baseline-vs-with-skill comparison per scenario, on the outcome axis.
+
+    Per-scenario deltas are descriptive (independent runs, not matched pairs). The
+    cross-scenario McNemar treats each scenario's outcome-axis majority as one paired
+    binary observation (baseline vs with-skill) and is the closest valid inferential
+    summary; it is still weak at small scenario counts.
+    """
+    cells = {(c["runner"], c["skill"], c["scenario_id"], c["mode"]): c for c in aggregate_cells(results)}
+    scenario_keys: list[tuple[str, str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for c in cells.values():
+        sk = (c["runner"], c["skill"], c["scenario_id"])
+        if sk not in seen:
+            seen.add(sk)
+            scenario_keys.append(sk)
+
+    per_scenario: list[dict[str, Any]] = []
+    b01 = b10 = 0  # baseline-pass/skill-fail, skill-pass/baseline-fail (outcome majority)
+    for runner, skill, scenario_id in scenario_keys:
+        base = cells.get((runner, skill, scenario_id, "baseline"))
+        skl = cells.get((runner, skill, scenario_id, "with-skill"))
+        if base is None or skl is None:
+            continue
+
+        def rate(cell: dict[str, Any]) -> float | None:
+            denom = cell["outcome_applicable"]
+            return (cell["outcome_pass"] / denom) if denom else None
+
+        base_rate, skill_rate = rate(base), rate(skl)
+        entry = {
+            "runner": runner,
+            "skill": skill,
+            "scenario_id": scenario_id,
+            "axis": "outcome",
+            "baseline": f"{base['outcome_pass']}/{base['outcome_applicable']}",
+            "with_skill": f"{skl['outcome_pass']}/{skl['outcome_applicable']}",
+            "delta": None if (base_rate is None or skill_rate is None) else round(skill_rate - base_rate, 3),
+            "note": "descriptive (independent runs, not matched pairs)",
+        }
+        per_scenario.append(entry)
+        # Cross-scenario McNemar: majority-pass per arm as the paired binary.
+        if base["outcome_applicable"] and skl["outcome_applicable"]:
+            base_majority = base["outcome_pass"] * 2 >= base["outcome_applicable"]
+            skill_majority = skl["outcome_pass"] * 2 >= skl["outcome_applicable"]
+            if base_majority and not skill_majority:
+                b01 += 1
+            elif skill_majority and not base_majority:
+                b10 += 1
+
+    p_value = mcnemar_exact_p(b01, b10)
+    mcnemar: dict[str, Any] = {
+        "discordant_baseline_only": b01,
+        "discordant_skill_only": b10,
+        "exact_two_sided_p": None if p_value is None else round(p_value, 4),
+        "note": (
+            "outcome-axis majority per scenario; exact binomial McNemar. "
+            "Descriptive at small scenario counts — do not over-read."
+        ),
+    }
+    return {"per_scenario": per_scenario, "mcnemar": mcnemar}
+
+
 def write_summary(output_root: Path, results: list[dict[str, Any]]) -> Path:
     summary_path = output_root / "summary.json"
     totals = {
@@ -1121,10 +1273,13 @@ def write_summary(output_root: Path, results: list[dict[str, Any]]) -> Path:
         "runs_with_assertions": sum(1 for item in results if item["grade"].get("assertions")),
     }
     public_runs = [{"metadata": public_metadata(item["metadata"]), "grade": item["grade"]} for item in results]
+    cells = aggregate_cells(results)
     summary = {
         "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "output_root": str(output_root),
         "totals": totals,
+        "cells": cells,
+        "pairs": build_pairs(results),
         "runs": public_runs,
     }
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -1159,6 +1314,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--skill", help="Run only scenarios for one skill.")
     parser.add_argument("--scenario", action="append", default=[], help="Run only the named scenario ID. Repeatable.")
     parser.add_argument("--mode", type=mode_list, default=["with-skill"])
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=5,
+        help=(
+            "Independent runs per (scenario, mode) cell. Default 5 — a single "
+            "sweep cannot separate a real 2-3pp effect from run-to-run noise. "
+            "Use --runs 1 for quick local iteration (single-sample, "
+            "non-authoritative). Forced to 1 under --dry-run."
+        ),
+    )
     parser.add_argument("--workspace-source", type=Path, help="Directory copied into each isolated run workspace.")
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--dry-run", action="store_true", help="Write prompts and metadata without invoking runners.")
@@ -1230,6 +1396,8 @@ def main(argv: list[str]) -> int:
     output_root.mkdir(parents=True, exist_ok=True)
     results: list[dict[str, Any]] = []
 
+    total_runs = 1 if args.dry_run else max(1, args.runs)
+
     for runner in args.runner:
         for scenario in scenarios:
             for mode in args.mode:
@@ -1238,24 +1406,27 @@ def main(argv: list[str]) -> int:
                     workspace_source = workspace_source.resolve()
                 else:
                     workspace_source = resolve_scenario_workspace(scenario, args.scenarios)
-                job = create_job(
-                    runner=runner,
-                    scenario=scenario,
-                    mode=mode,
-                    output_root=output_root,
-                    skills_dir=args.skills_dir,
-                    workspace_source=workspace_source,
-                )
-                result = run_job(
-                job,
-                timeout_seconds=args.timeout,
-                dry_run=args.dry_run,
-                enable_llm_judge=args.enable_llm_judge,
-                llm_judge_cache_dir=args.llm_judge_cache_dir,
-                llm_judge_backend=args.llm_judge_backend,
-                llm_judge_base_url=args.llm_judge_base_url,
-            )
-                results.append(result)
+                for run_index in range(1, total_runs + 1):
+                    job = create_job(
+                        runner=runner,
+                        scenario=scenario,
+                        mode=mode,
+                        output_root=output_root,
+                        skills_dir=args.skills_dir,
+                        workspace_source=workspace_source,
+                        run_index=run_index,
+                        total_runs=total_runs,
+                    )
+                    result = run_job(
+                        job,
+                        timeout_seconds=args.timeout,
+                        dry_run=args.dry_run,
+                        enable_llm_judge=args.enable_llm_judge,
+                        llm_judge_cache_dir=args.llm_judge_cache_dir,
+                        llm_judge_backend=args.llm_judge_backend,
+                        llm_judge_base_url=args.llm_judge_base_url,
+                    )
+                    results.append(result)
 
     finalize_cross_mode_assertions(results)
 
@@ -1264,12 +1435,36 @@ def main(argv: list[str]) -> int:
             json.dumps(result["grade"], indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
         meta = result["metadata"]
+        run_tag = f"/run-{meta['run_index']:02d}" if meta.get("total_runs", 1) > 1 else ""
         print(
-            f"{meta['runner']}/{meta['scenario_id']}/{meta['mode']}: "
+            f"{meta['runner']}/{meta['scenario_id']}/{meta['mode']}{run_tag}: "
             f"{meta['status']} / {result['grade']['status']}"
         )
 
     summary_path = write_summary(output_root, results)
+
+    if not args.dry_run:
+        print(f"--- cell pass-rates (runs={total_runs}) ---")
+        for cell in aggregate_cells(results):
+            outcome = (
+                f"outcome {cell['outcome_pass']}/{cell['outcome_applicable']}"
+                if cell["outcome_applicable"]
+                else "outcome n/a"
+            )
+            print(
+                f"{cell['runner']}/{cell['scenario_id']}/{cell['mode']}: "
+                f"status {cell['status_pass_runs']}/{cell['runs']}, {outcome}, "
+                f"form {cell['form_pass']}/{cell['form_applicable']}"
+            )
+        if len(args.mode) == 2:
+            mcnemar = build_pairs(results)["mcnemar"]
+            print(
+                f"McNemar (outcome majority): baseline-only={mcnemar['discordant_baseline_only']}, "
+                f"skill-only={mcnemar['discordant_skill_only']}, "
+                f"exact p={mcnemar['exact_two_sided_p']} — {mcnemar['note']}"
+            )
+        if total_runs == 1:
+            print("note: --runs 1 is single-sample and non-authoritative; use --runs 5+ for a measured result.")
     print(f"summary: {summary_path}")
 
     failed = False

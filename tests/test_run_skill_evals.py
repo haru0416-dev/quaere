@@ -13,7 +13,15 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "evals" / "run_skill_evals.py"
 
 sys.path.insert(0, str(ROOT))
-from evals.run_skill_evals import Scenario, evaluate_assertion, grade_output, load_scenarios  # noqa: E402
+from evals.run_skill_evals import (  # noqa: E402
+    Scenario,
+    aggregate_cells,
+    assertion_axis,
+    evaluate_assertion,
+    grade_output,
+    load_scenarios,
+    mcnemar_exact_p,
+)
 
 
 def _make_demo_skill(skills_dir: Path) -> Path:
@@ -31,6 +39,10 @@ def _write_scenarios(path: Path, scenarios: list[dict[str, Any]]) -> None:
 
 
 def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
+    # These tests exercise single-run grading semantics; default to --runs 1 unless
+    # a test opts into repeated runs explicitly (the N-run aggregation tests do).
+    if "--runs" not in args:
+        args = [*args, "--runs", "1"]
     return subprocess.run(
         [sys.executable, str(RUNNER), *args],
         cwd=ROOT,
@@ -662,6 +674,178 @@ class AssertionTypesTest(unittest.TestCase):
             self.assertEqual(totals["passed_assertion_runs"], 1)
             self.assertEqual(totals["manual_only_runs"], 1)
             self.assertEqual(totals["runs_with_assertions"], 1)
+
+
+def _find_cell(summary: dict[str, Any], scenario_id: str, mode: str) -> dict[str, Any]:
+    for cell in summary.get("cells", []):
+        if cell["scenario_id"] == scenario_id and cell["mode"] == mode:
+            return cell
+    raise AssertionError(f"no cell for {scenario_id}/{mode} in {summary.get('cells')}")
+
+
+class NRunAggregationTest(unittest.TestCase):
+    def test_repeated_runs_nest_and_aggregate(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            skills_dir = temp_path / "skills"
+            _make_demo_skill(skills_dir)
+            scenarios = temp_path / "scenarios.json"
+            output_dir = temp_path / "results"
+            _write_scenarios(
+                scenarios,
+                [
+                    {
+                        "id": "n-run",
+                        "skill": "demo",
+                        "prompt": "x",
+                        "expected": [],
+                        "assertions": [{"name": "has hello", "type": "contains", "text": "hello"}],
+                    }
+                ],
+            )
+            completed = _run(
+                [
+                    "--scenarios", str(scenarios),
+                    "--skills-dir", str(skills_dir),
+                    "--runner", "fake=printf hello",
+                    "--output-dir", str(output_dir),
+                    "--runs", "3",
+                ],
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            run_grades = list(output_dir.glob("*/*/demo/n-run/with-skill/run-*/grade.json"))
+            self.assertEqual(len(run_grades), 3, run_grades)
+            cell = _find_cell(_load_summary(output_dir), "n-run", "with-skill")
+            self.assertEqual(cell["runs"], 3)
+            self.assertEqual(cell["status_pass_runs"], 3)
+
+    def test_axis_tag_splits_outcome_and_form(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            skills_dir = temp_path / "skills"
+            _make_demo_skill(skills_dir)
+            scenarios = temp_path / "scenarios.json"
+            output_dir = temp_path / "results"
+            _write_scenarios(
+                scenarios,
+                [
+                    {
+                        "id": "axes",
+                        "skill": "demo",
+                        "prompt": "x",
+                        "expected": [],
+                        "assertions": [
+                            {"name": "outcome ok", "type": "contains", "text": "hello", "axis": "outcome"},
+                            {"name": "form missing", "type": "contains", "text": "NEVER", "axis": "form"},
+                        ],
+                    }
+                ],
+            )
+            completed = _run(
+                [
+                    "--scenarios", str(scenarios),
+                    "--skills-dir", str(skills_dir),
+                    "--runner", "fake=printf hello",
+                    "--output-dir", str(output_dir),
+                    "--runs", "2",
+                ],
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            cell = _find_cell(_load_summary(output_dir), "axes", "with-skill")
+            self.assertEqual((cell["outcome_pass"], cell["outcome_applicable"]), (2, 2))
+            self.assertEqual((cell["form_pass"], cell["form_applicable"]), (0, 2))
+
+    def test_paired_comparison_reports_delta_and_mcnemar(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            skills_dir = temp_path / "skills"
+            _make_demo_skill(skills_dir)
+            scenarios = temp_path / "scenarios.json"
+            output_dir = temp_path / "results"
+            # The runner echoes ${mode}; the outcome assertion only matches the
+            # with-skill arm, so baseline fails outcome and with-skill passes it.
+            _write_scenarios(
+                scenarios,
+                [
+                    {
+                        "id": "paired",
+                        "skill": "demo",
+                        "prompt": "x",
+                        "expected": [],
+                        "assertions": [
+                            {"name": "mode is with-skill", "type": "contains", "text": "with-skill", "axis": "outcome"}
+                        ],
+                    }
+                ],
+            )
+            completed = _run(
+                [
+                    "--scenarios", str(scenarios),
+                    "--skills-dir", str(skills_dir),
+                    "--runner", "fake=printf '%s' ${mode}",
+                    "--output-dir", str(output_dir),
+                    "--mode", "both",
+                    "--runs", "3",
+                ],
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            summary = _load_summary(output_dir)
+            base = _find_cell(summary, "paired", "baseline")
+            skl = _find_cell(summary, "paired", "with-skill")
+            self.assertEqual((base["outcome_pass"], base["outcome_applicable"]), (0, 3))
+            self.assertEqual((skl["outcome_pass"], skl["outcome_applicable"]), (3, 3))
+            pairs = summary["pairs"]
+            entry = next(e for e in pairs["per_scenario"] if e["scenario_id"] == "paired")
+            self.assertEqual(entry["delta"], 1.0)
+            self.assertEqual(pairs["mcnemar"]["discordant_skill_only"], 1)
+            self.assertEqual(pairs["mcnemar"]["discordant_baseline_only"], 0)
+
+    def test_dry_run_forces_single_sample(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            output_dir = temp_path / "results"
+            completed = _run(
+                [
+                    "--runner", "noop=printf ''",
+                    "--scenario", "sdk-version-grounding",
+                    "--output-dir", str(output_dir),
+                    "--runs", "5",
+                    "--dry-run",
+                ],
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            # Forced to one sample: flat layout, no run-NN nesting.
+            flat = list(output_dir.glob("*/noop/quaere-grounding/sdk-version-grounding/with-skill/prompt.md"))
+            nested = list(output_dir.glob("*/noop/*/*/with-skill/run-*/prompt.md"))
+            self.assertEqual(len(flat), 1, flat)
+            self.assertEqual(nested, [])
+
+
+class PureAggregationTest(unittest.TestCase):
+    def test_mcnemar_exact_p_no_discordants_is_none(self) -> None:
+        self.assertIsNone(mcnemar_exact_p(0, 0))
+
+    def test_mcnemar_exact_p_symmetric_values(self) -> None:
+        # b01=b10=5 -> two-sided p should be ~1.0
+        self.assertAlmostEqual(mcnemar_exact_p(5, 5), 1.0, places=6)
+
+    def test_mcnemar_exact_p_all_one_direction(self) -> None:
+        # 0 vs 6 discordants -> p = 2 * 0.5**6
+        self.assertAlmostEqual(mcnemar_exact_p(0, 6), 2 * (0.5 ** 6), places=6)
+
+    def test_assertion_axis_defaults_to_form(self) -> None:
+        self.assertEqual(assertion_axis({"type": "contains"}), "form")
+        self.assertEqual(assertion_axis({"type": "contains", "axis": "outcome"}), "outcome")
+        self.assertEqual(assertion_axis({"type": "contains", "axis": "bogus"}), "form")
+
+    def test_aggregate_cells_skips_dry_run(self) -> None:
+        results = [
+            {
+                "metadata": {"runner": "r", "skill": "s", "scenario_id": "x", "mode": "with-skill", "dry_run": True},
+                "grade": {"status": "manual-only", "assertions": []},
+            }
+        ]
+        self.assertEqual(aggregate_cells(results), [])
 
 
 class RequireAssertionsFlagTest(unittest.TestCase):
