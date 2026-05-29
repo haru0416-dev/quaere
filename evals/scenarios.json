@@ -19,11 +19,11 @@
           "name": "ledger sections appear in canonical order",
           "type": "ordered_sections",
           "patterns": [
-            "(?im)^(?:#+\\s*)?(?:Findings?|\\s*[-*]?\\s*F-\\d+)",
-            "(?im)^(?:#+\\s*)?(?:Claims?\\s*/\\s*Hypothes(?:es|is)|Claims?|Hypothes(?:es|is)|\\s*[-*]?\\s*[HC]-\\d+)",
-            "(?im)^(?:#+\\s*)?(?:Defense|defense|Defense and probes)",
-            "(?im)^(?:#+\\s*)?(?:Decision|decision|confirmed|rejected|inconclusive)",
-            "(?im)^(?:#+\\s*)?(?:Verif|Handoff|Patch)"
+            "(?im)^(?:[#*\\s]*)(?:Findings?|\\s*[-*]?\\s*F-\\d+)",
+            "(?im)^(?:[#*\\s]*)(?:Claims?\\s*/\\s*Hypothes(?:es|is)|Claims?|Hypothes(?:es|is)|\\s*[-*]?\\s*[HC]-\\d+)",
+            "(?im)^(?:[#*\\s]*)(?:Defense|defense|Defense and probes)",
+            "(?im)^(?:[#*\\s]*)(?:Decision|decision|confirmed|rejected|inconclusive)",
+            "(?im)^(?:[#*\\s]*)(?:Verif|Handoff|Patch)"
           ]
         },
         {
