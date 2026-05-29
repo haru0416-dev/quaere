@@ -63,14 +63,17 @@ def _write_repo(
     readme: str | None = None,
     examples: str | None = None,
     scenarios: list[dict[str, Any]] | None = None,
+    group: str | None = None,
 ) -> None:
     skills = skills if skills is not None else ["sample-skill"]
-    (root / "skills").mkdir(parents=True, exist_ok=True)
+    base = (root / "skills" / group) if group else (root / "skills")
+    base.mkdir(parents=True, exist_ok=True)
     for name in skills:
-        _write_skill(root / "skills", name)
+        _write_skill(base, name)
 
+    ref_prefix = f"skills/{group}" if group else "skills"
     readme_text = readme if readme is not None else "# Test repo\n\n" + "\n".join(
-        f"- [skills/{name}](skills/{name}/SKILL.md)" for name in skills
+        f"- [{ref_prefix}/{name}]({ref_prefix}/{name}/SKILL.md)" for name in skills
     )
     (root / "README.md").write_text(readme_text + "\n", encoding="utf-8")
 
@@ -442,7 +445,7 @@ class ValidateMainTest(unittest.TestCase):
     def test_clean_repo_returns_zero(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            _write_repo(root, skills=["alpha-skill"])
+            _write_repo(root, skills=["alpha-skill"], group="core")
             rc, out = _run_main(root)
         self.assertEqual(rc, 0, out)
         self.assertIn("Skill validation passed", out)
@@ -450,7 +453,7 @@ class ValidateMainTest(unittest.TestCase):
     def test_missing_readme_returns_nonzero(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            _write_repo(root, skills=["alpha-skill"])
+            _write_repo(root, skills=["alpha-skill"], group="core")
             (root / "README.md").unlink()
             rc, out = _run_main(root)
         self.assertEqual(rc, 1)
@@ -459,7 +462,7 @@ class ValidateMainTest(unittest.TestCase):
     def test_agent_state_directory_is_detected(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            _write_repo(root, skills=["alpha-skill"])
+            _write_repo(root, skills=["alpha-skill"], group="core")
             (root / ".agent-state").mkdir()
             (root / ".agent-state" / "notes.md").write_text("local", encoding="utf-8")
             rc, out = _run_main(root)
@@ -479,7 +482,7 @@ class ValidateMainTest(unittest.TestCase):
             )
             rc, out = _run_main(root)
         self.assertEqual(rc, 1)
-        self.assertIn("skills/ contains no skill directories", out)
+        self.assertIn("skills/core and skills/extensions contain no skill directories", out)
 
     def test_unknown_scenario_skill_is_reported(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -487,6 +490,7 @@ class ValidateMainTest(unittest.TestCase):
             _write_repo(
                 root,
                 skills=["alpha-skill"],
+                group="core",
                 scenarios=[
                     {
                         "id": "alpha-scenario",
