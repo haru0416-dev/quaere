@@ -49,6 +49,18 @@ def _write_skill(
         "---",
         f"# {name}",
         "",
+        "## Iron Law",
+        "",
+        "Do not skip the gate.",
+        "",
+        "## Handoff triggers",
+        "",
+        "Switch out when blocked.",
+        "",
+        "## Stop condition",
+        "",
+        "Halt when done.",
+        "",
         "Body.",
     ]
     body_lines.extend(["padding"] * line_padding)
@@ -310,6 +322,60 @@ def _write_repo_extras(root: Path, skills: list[str]) -> None:
         ),
         encoding="utf-8",
     )
+
+
+class AnchorPositionTest(unittest.TestCase):
+    def _check(self, body: str) -> list[str]:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "SKILL.md"
+            path.write_text(body, encoding="utf-8")
+            errors: list[str] = []
+            vs.check_anchor_positions(path, errors)
+        return errors
+
+    def test_in_cap_anchors_pass(self) -> None:
+        body = "## Iron Law\nx\n## Handoff triggers (when to switch out)\nx\n## Stop condition\nhalt\n"
+        self.assertEqual(self._check(body), [])
+
+    def test_compact_stop_now_satisfies_guardrail_when_full_section_is_late(self) -> None:
+        padding = "\n".join(["filler"] * (vs.CODEX_READ_CAP + 20))
+        body = (
+            "## Iron Law\nx\n## Handoff triggers\nx\n"
+            "**Stop now — hard stops:** halt before destructive actions.\n"
+            f"{padding}\n## Stop condition\nfull halt\n"
+        )
+        self.assertEqual(self._check(body), [])
+
+    def test_handoff_past_cap_is_rejected(self) -> None:
+        padding = "\n".join(["filler"] * (vs.CODEX_READ_CAP + 5))
+        body = f"## Iron Law\nx\n{padding}\n## Handoff triggers\nx\n## Stop condition\nhalt\n"
+        errors = self._check(body)
+        self.assertTrue(
+            any("Handoff triggers" in e and "past the Codex read cap" in e for e in errors),
+            f"errors were: {errors}",
+        )
+
+    def test_missing_stop_guardrail_is_rejected(self) -> None:
+        body = "## Iron Law\nx\n## Handoff triggers\nx\nno stop here\n"
+        errors = self._check(body)
+        self.assertTrue(any("missing stop guardrail" in e for e in errors), f"errors were: {errors}")
+
+    def test_stop_guardrail_past_cap_is_rejected(self) -> None:
+        padding = "\n".join(["filler"] * (vs.CODEX_READ_CAP + 5))
+        body = f"## Iron Law\nx\n## Handoff triggers\nx\n{padding}\n## Stop condition\nhalt\n"
+        errors = self._check(body)
+        self.assertTrue(
+            any("stop guardrail first appears at line" in e for e in errors),
+            f"errors were: {errors}",
+        )
+
+    def test_missing_iron_law_is_rejected(self) -> None:
+        body = "## Handoff triggers\nx\n## Stop condition\nhalt\n"
+        errors = self._check(body)
+        self.assertTrue(
+            any("missing reachability anchor: Iron Law" in e for e in errors),
+            f"errors were: {errors}",
+        )
 
 
 class LoadScenarioSkillsTest(unittest.TestCase):
