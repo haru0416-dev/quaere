@@ -19,6 +19,13 @@ MAX_SKILL_LINES = 500
 # that is structurally unread. Reachability-critical anchors must land within a
 # conservative cap so a few lines of drift do not push them out of reach.
 CODEX_READ_CAP = 200
+# Per-description hard cap shared by Anthropic's platform spec and the Codex
+# skill.md spec. Keeping descriptions under it stays portable across Claude's
+# 1536-char listing truncation and Codex's aggregate-list budget.
+MAX_DESCRIPTION_CHARS = 1024
+# Reference files past this length should carry a table of contents so partial
+# (head-style) reads still see their scope.
+REFERENCE_TOC_THRESHOLD = 100
 
 # Required blocks that must appear in specific SKILL.md files.
 # Key: skill directory name. Value: list of (pattern, description) pairs.
@@ -148,6 +155,48 @@ def check_anchor_positions(skill_md: Path, errors: list[str]) -> None:
         )
 
 
+def check_stop_reminder_shorter(skill_md: Path, errors: list[str]) -> None:
+    """A compact '**Stop now' reminder must be strictly shorter than the full Stop section.
+
+    The in-cap reminder is a pointer + non-negotiables, not a second copy of the
+    section it points to; if it grows to rival the full section it becomes a
+    competing source of truth (instruction conflict on full-read agents).
+    """
+    text = skill_md.read_text(encoding="utf-8")
+    reminder = re.search(r"(\*\*Stop now.*?)(?:\n\n|\Z)", text, re.S)
+    if reminder is None:
+        return
+    section = re.search(r"(^## Stop condition.*?)(?=^## |\Z)", text, re.S | re.M)
+    if section is None:
+        fail(errors, f"{skill_md}: has a '**Stop now' reminder but no full '## Stop condition' section to point to")
+        return
+    if len(reminder.group(1)) >= len(section.group(1)):
+        fail(
+            errors,
+            f"{skill_md}: the '**Stop now' reminder ({len(reminder.group(1))} chars) is not shorter "
+            f"than the full Stop section ({len(section.group(1))} chars); keep it a pointer, not a copy",
+        )
+
+
+def check_reference_tocs(skill_dir: Path, errors: list[str]) -> None:
+    """Reference files over the threshold need a table-of-contents signal near the top."""
+    references = skill_dir / "references"
+    if not references.is_dir():
+        return
+    for ref in sorted(references.glob("*.md")):
+        lines = ref.read_text(encoding="utf-8").splitlines()
+        if len(lines) <= REFERENCE_TOC_THRESHOLD:
+            continue
+        head = "\n".join(lines[:25])
+        has_toc = bool(re.search(r"(?im)contents", head)) or len(re.findall(r"\]\(#", head)) >= 2
+        if not has_toc:
+            fail(
+                errors,
+                f"{ref}: {len(lines)} lines (> {REFERENCE_TOC_THRESHOLD}) but no table of contents "
+                f"near the top; add one so partial reads see the file's scope",
+            )
+
+
 def validate_skill(
     skill_dir: Path,
     readme_text: str,
@@ -176,6 +225,14 @@ def validate_skill(
         fail(errors, f"{skill_md}: description should start with 'This skill should be used'")
     if len(description) < 80:
         fail(errors, f"{skill_md}: description is too short to guide triggering")
+    if len(description) > MAX_DESCRIPTION_CHARS:
+        fail(
+            errors,
+            f"{skill_md}: description is {len(description)} chars, over the "
+            f"{MAX_DESCRIPTION_CHARS}-char cap; shorten it to stay portable across agents",
+        )
+    if "<" in description or ">" in description:
+        fail(errors, f"{skill_md}: description must not contain angle brackets")
 
     if metadata.get("license") != "MIT":
         fail(errors, f"{skill_md}: license should be MIT")
@@ -185,6 +242,8 @@ def validate_skill(
         fail(errors, f"{skill_md}: {line_count} lines exceeds {MAX_SKILL_LINES}-line budget")
 
     check_anchor_positions(skill_md, errors)
+    check_stop_reminder_shorter(skill_md, errors)
+    check_reference_tocs(skill_dir, errors)
 
     group = skill_dir.parent.name
     if group in ("core", "extensions"):
