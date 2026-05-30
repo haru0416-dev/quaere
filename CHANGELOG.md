@@ -4,6 +4,27 @@ All notable changes to Quaere are documented in this file. The format follows [K
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-05-30
+
+Quaere splits into a core set plus opt-in extensions, adds a new `quaere-invention` extension, and reorganizes every skill body so the prescriptive content survives Codex CLI's ~220-line SKILL.md read cap. The install default changed and the skill bodies changed.
+
+### Added
+
+- **`quaere-invention` extension** — a divergence skill for non-obvious approaches: name the default basin, break the assumptions that make it feel inevitable, label each candidate's novelty honestly, and design a kill-probe before promoting any idea. Opt-in: `quaere install --skill invention`.
+
+### Changed
+
+- **`install` installs the core set only by default** — `quaere-evidence`, `quaere-execution`, `quaere-grounding`, `quaere-semantic`. Extensions are opt-in via `quaere install --extensions` (all) or `quaere install --skill <name>` (repeatable, e.g. `--skill audit`). `quaere-audit` moved from the default set to an extension. `update` stays conservative: it refreshes whatever is already installed and does not remove a previously-installed extension or silently pull in new ones.
+- **`list`** groups core vs. extensions and shows how to install each uninstalled extension.
+- **Skill bodies reorganized for the Codex read cap.** Codex CLI reads only ~the first 220 lines of a SKILL.md; content past that is structurally unread. Handoff sections were front-loaded, worked examples and long detail moved into each skill's `references/`, `quaere-evidence` was trimmed 376 → 316 lines, and a compact "Stop now" guardrail reminder was added within the first 200 lines of `quaere-evidence`, `quaere-grounding`, `quaere-execution`, and `quaere-audit` (the full Stop condition stays at the end for full-read agents like Claude Code and OpenCode). The decision discipline is unchanged — only where it sits in the file.
+
+### Internal
+
+- **Layout:** skills now live under `skills/core/` and `skills/extensions/`; installed skill names are unchanged.
+- **Eval harness:** `--runs N` (default 5; forced to 1 under `--dry-run`) with per-cell pass-rates, an outcome-vs-form assertion axis split, and an exact-binomial McNemar paired baseline-vs-skill comparison. Fixed `ordered_sections` matching for bold markdown headers and added a Japanese `requires_pair` alternate.
+- **`validate_skills.py`:** enforces reachability anchors (Iron Law / Handoff triggers / a stop reminder) within a 200-line cap, `description` ≤ 1024 chars with no angle brackets, a compact stop reminder strictly shorter than its full section, and a table-of-contents on any `references/*.md` over 100 lines.
+- CI gates pull requests that touch `cli/` on `pnpm check` (lint + typecheck + vitest).
+
 ## [0.4.1] — 2026-05-24
 
 Maintenance release. No user-facing CLI or skill changes — the bundled skills are byte-identical to v0.4.0. The release exists to retire the temporary `NPM_TOKEN` secret used for the first npm publish and to refresh several CI pins that were two majors behind at v0.4.0 ship.
