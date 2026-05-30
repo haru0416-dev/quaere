@@ -257,6 +257,29 @@ class ValidateSkillTest(unittest.TestCase):
             errors = self._validate(root)
         self.assertTrue(any("too short" in e for e in errors))
 
+    def test_description_over_cap_is_rejected(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "skills").mkdir()
+            long_desc = "This skill should be used " + ("x" * (vs.MAX_DESCRIPTION_CHARS + 5))
+            _write_skill(root / "skills", "sample-skill", description=long_desc)
+            _write_repo_extras(root, ["sample-skill"])
+            errors = self._validate(root)
+        self.assertTrue(any("over the" in e and "char cap" in e for e in errors), f"errors: {errors}")
+
+    def test_description_with_angle_brackets_is_rejected(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "skills").mkdir()
+            _write_skill(
+                root / "skills",
+                "sample-skill",
+                description="This skill should be used when you need <input> processing for the validator test.",
+            )
+            _write_repo_extras(root, ["sample-skill"])
+            errors = self._validate(root)
+        self.assertTrue(any("angle brackets" in e for e in errors), f"errors: {errors}")
+
     def test_non_mit_license_is_rejected(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -376,6 +399,64 @@ class AnchorPositionTest(unittest.TestCase):
             any("missing reachability anchor: Iron Law" in e for e in errors),
             f"errors were: {errors}",
         )
+
+
+class StopReminderShorterTest(unittest.TestCase):
+    def _check(self, body: str) -> list[str]:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "SKILL.md"
+            path.write_text(body, encoding="utf-8")
+            errors: list[str] = []
+            vs.check_stop_reminder_shorter(path, errors)
+        return errors
+
+    def test_no_reminder_is_fine(self) -> None:
+        self.assertEqual(self._check("## Stop condition\nhalt when done, and also when budget spent\n"), [])
+
+    def test_reminder_shorter_passes(self) -> None:
+        body = (
+            "**Stop now — hard stops:** halt before destructive actions.\n\n"
+            "## Stop condition\n"
+            "Halt before destructive actions, when the budget is spent, when two probes "
+            "are inconclusive, and once a confirmed fix is in hand. Do not gold-plate.\n"
+        )
+        self.assertEqual(self._check(body), [])
+
+    def test_reminder_not_shorter_is_rejected(self) -> None:
+        long_reminder = "**Stop now:** " + ("halt " * 60)
+        body = f"{long_reminder}\n\n## Stop condition\nhalt.\n"
+        errors = self._check(body)
+        self.assertTrue(any("not shorter" in e for e in errors), f"errors: {errors}")
+
+    def test_reminder_without_full_section_is_rejected(self) -> None:
+        errors = self._check("**Stop now:** halt before destructive actions.\n\nbody only\n")
+        self.assertTrue(any("no full '## Stop condition'" in e for e in errors), f"errors: {errors}")
+
+
+class ReferenceTocTest(unittest.TestCase):
+    def _check(self, ref_lines: list[str]) -> list[str]:
+        with TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / "skill"
+            (skill_dir / "references").mkdir(parents=True)
+            (skill_dir / "references" / "big.md").write_text("\n".join(ref_lines) + "\n", encoding="utf-8")
+            errors: list[str] = []
+            vs.check_reference_tocs(skill_dir, errors)
+        return errors
+
+    def test_short_reference_needs_no_toc(self) -> None:
+        self.assertEqual(self._check(["line"] * 50), [])
+
+    def test_long_reference_without_toc_is_rejected(self) -> None:
+        errors = self._check(["# Title"] + ["body line"] * (vs.REFERENCE_TOC_THRESHOLD + 5))
+        self.assertTrue(any("no table of contents" in e for e in errors), f"errors: {errors}")
+
+    def test_long_reference_with_contents_marker_passes(self) -> None:
+        lines = ["# Title", "", "## Contents", "- a", "- b"] + ["body"] * (vs.REFERENCE_TOC_THRESHOLD + 5)
+        self.assertEqual(self._check(lines), [])
+
+    def test_long_reference_with_anchor_links_passes(self) -> None:
+        lines = ["# Title", "[A](#a)", "[B](#b)"] + ["body"] * (vs.REFERENCE_TOC_THRESHOLD + 5)
+        self.assertEqual(self._check(lines), [])
 
 
 class LoadScenarioSkillsTest(unittest.TestCase):
