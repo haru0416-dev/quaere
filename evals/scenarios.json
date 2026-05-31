@@ -1107,6 +1107,62 @@
           "rubric": "You are grading whether an AI followed a structured invention procedure that escapes the obvious answer. The text should: (1) name a concrete default/obvious answer (the boring solution); (2) present at least three candidate ideas; (3) each candidate should name a DIFFERENT underlying assumption it breaks and the mechanism of the break; (4) the candidates should be MATERIALLY different from the named default, not reworded versions of it; (5) at least one candidate should have a genuinely falsifiable kill-probe (a stated signal that could actually occur and would kill the idea). Respond PASS if at least three candidates break genuinely different assumptions AND are materially distinct from the default AND at least one kill-probe is falsifiable. Respond FAIL if candidates mostly rephrase the default, break the same assumption repeatedly, or have no falsifiable kill-probe. Answer with PASS or FAIL on the first line, then one sentence of justification."
         }
       ]
+    },
+    {
+      "id": "naming-metaphor-driven-vetted-finalists",
+      "skill": "quaere-naming",
+      "prompt": "We are building a CLI tool that watches a codebase and re-runs only the tests affected by each change. We need a name. It is a developer tool that must work as a GitHub org, an npm package, and a .dev domain. Establish a brief first, explore metaphor territories instead of thesaurus synonyms, filter out AI-slop, check real availability before presenting anything, and give us vetted finalists each with an origin story. Do not just dump a list of generic names like TestFlow or SmartTest.",
+      "expected": [
+        "establishes a naming brief (function, audience, tone, platforms) before generating any name",
+        "explores named metaphor territories rather than thesaurus synonyms",
+        "filters candidates against anti-patterns internally instead of dumping a raw list",
+        "runs a competitor search first, then real platform availability checks, not guesses from memory",
+        "presents 3-5 finalists, each with a 15-second origin story and a tool-verified availability status",
+        "loops back rather than lowering the bar if fewer than three candidates survive the availability gate"
+      ],
+      "assertions": [
+        {
+          "name": "brief then territories then availability then origin/finalist, in order",
+          "type": "ordered_sections",
+          "patterns": [
+            "(?i)naming brief|\\bbrief\\b|ブリーフ|what does it do|who is it for|audience|オーディエンス|tone|platform|プラットフォーム",
+            "(?i)territor|metaphor|メタファ|テリトリ|領域|concept",
+            "(?i)availab|可用性|whois|npm view|websearch|competitor|競合|taken|free",
+            "(?i)origin|由来|why it works|finalist|候補|recommendation|推す"
+          ]
+        },
+        {
+          "name": "at least two real availability-check invocations (tool or search), not mere mentions",
+          "type": "min_section_count",
+          "pattern": "(?i)\\b(whois|npm view|check-availability|websearch|competitor search|競合検索)\\b",
+          "min": 2
+        },
+        {
+          "name": "uses metaphor/territory vocabulary, not thesaurus framing",
+          "type": "regex",
+          "pattern": "(?i)metaphor|territor|メタファ|テリトリ|origin story|由来"
+        },
+        {
+          "name": "a presented finalist is paired with availability status, not named from memory",
+          "type": "requires_pair",
+          "if_contains": "(?i)finalist|recommend|top candidate|we suggest|候補|推す|最終",
+          "must_also_contain": "(?i)availab|可用性|whois|websearch|taken|free|verified|確認"
+        },
+        {
+          "name": "iron-law framing (availability gate / handoff / stop) appears only with the skill, not in baseline",
+          "type": "not_in_baseline",
+          "patterns": [
+            "(?i)availability gate|可用性ゲート|tool-verified|ツール検証|required next skill|stop condition"
+          ]
+        },
+        {
+          "name": "outcome: metaphor-grounded, availability-gated naming that never presents from memory",
+          "type": "llm_judge",
+          "axis": "outcome",
+          "model": "gpt-5.5",
+          "rubric": "You are grading whether an AI followed a metaphor-driven, availability-gated naming procedure whose iron law is: never present a name whose availability was not actually verified (memory and guesses are not evidence). The output may be in English or Japanese. A good output: (1) establishes a naming brief (function, audience, tone, platforms) before generating names; (2) explores named metaphor territories rather than listing thesaurus synonyms or generic slop; (3) keeps raw candidate generation internal rather than dumping an unfiltered list; (4) treats availability honestly. Respond PASS if EITHER (a) it presents brief-first, metaphor-grounded finalists and every presented name carries a concrete origin story AND a real availability status obtained by an actual check (whois/npm/GitHub/WebSearch/competitor search), with any uncheckable platform explicitly marked inconclusive; OR (b) when the environment blocks availability checks, it correctly REFUSES to present unverified names and instead hands off a concrete verification probe (honoring the never-present-from-memory rule). Respond FAIL if it presents names with availability claimed from memory or fabricated, skips the brief, pulls thesaurus/slop names, or dumps an unfiltered list. Answer with PASS or FAIL on the first line, then one sentence of justification."
+        }
+      ]
     }
   ]
 }

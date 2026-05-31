@@ -100,6 +100,20 @@ Expected behavior:
 - Classifies every candidate with the fixed novelty labels and never self-rates an idea as "truly novel".
 - Designs a kill-probe (not a confirmation test) for the top candidates and hands them off with a stop condition.
 
+## `quaere-naming`
+
+Prompt:
+
+> We are building a CLI that watches a codebase and re-runs only the tests affected by each change. It needs to work as a GitHub org, an npm package, and a `.dev` domain. Give us a name — not generic AI-slop like TestFlow or SmartTest.
+
+Expected behavior:
+
+- Establishes a naming brief (function, audience, tone, platforms) before generating any name.
+- Explores 2–3 named metaphor territories instead of pulling thesaurus synonyms.
+- Generates and filters candidates internally against the anti-pattern checklist; does not dump a raw list.
+- Runs a mandatory availability gate — competitor search first, then real platform checks (whois / npm / GitHub) — never claiming availability from memory.
+- Presents 3–5 finalists, each with a 15-second origin story and tool-verified availability status, and loops back rather than lowering the bar if fewer than 3 survive.
+
 ## Combined pipeline
 
 Prompt:
