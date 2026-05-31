@@ -92,7 +92,7 @@ Classify every candidate. The label is a finding, not a compliment. Do not overs
 
 - `known pattern` — already a named, common solution.
 - `recombination` — a new mix of known parts.
-- `locally novel` — likely new for this context, not in general.
+- `locally novel` — likely new for this context, not in general. Permitted only if the candidate carries a falsifiable kill-probe (step 6) whose kill signal could actually occur; the label is earned by a disconfirming probe, not by self-assessment. Without one, downgrade to `genuinely uncertain`.
 - `genuinely uncertain` — cannot tell if it exists; needs grounding.
 - `incoherent` — does not actually hold together; drop it.
 
@@ -170,7 +170,7 @@ The skill is complete when:
 
 - The default basin is named (step 1).
 - At least four mutation passes produced candidates, each naming broken assumption / mechanism / gain / failure mode.
-- Every candidate carries a novelty label from the fixed five, with no self-rated "truly novel" language.
+- Every candidate carries a novelty label from the fixed five, with no self-rated "truly novel" language; any candidate labeled `locally novel` carries its own falsifiable kill-probe rather than a self-rating.
 - The top 1–3 candidates each have a kill-probe.
 - A handoff or an explicit "not testable yet" stop is stated.
 

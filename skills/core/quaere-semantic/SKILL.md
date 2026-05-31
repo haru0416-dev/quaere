@@ -11,7 +11,7 @@ license: MIT
 
 **No `Why` without one of: direct evidence, calibrated reasoning marked `plausible`, or `UNKNOWN — probe: <next step>`.**
 
-This is not a stylistic rule. Paraphrasing implementation is not understanding, and a fabricated `Why` becomes ground truth for the next agent (or the same agent in a later session) that reads the analysis. The three states of grounding — `confident` (evidence supports the claim), `plausible` (reasoned but unverified, and explicitly marked as such), `UNKNOWN — probe: <step>` (the next action that would resolve it) — are the only acceptable forms. Fabricated certainty is the failure mode this rule prevents; `plausible` and `UNKNOWN` are explicit acknowledgments of weaker grounding, not loopholes.
+This is not a stylistic rule. Paraphrasing implementation is not understanding, and a fabricated `Why` becomes ground truth for the next agent (or the same agent in a later session) that reads the analysis. The three states of grounding — `confident` (a named external corroborator — a test, caller, `git blame`, spec, or ADR — was actually consulted and supports the claim), `plausible` (reasoned from the code's own shape but unverified, and explicitly marked as such), `UNKNOWN — probe: <step>` (the next action that would resolve it) — are the only acceptable forms. Fabricated certainty is the failure mode this rule prevents; `plausible` and `UNKNOWN` are explicit acknowledgments of weaker grounding, not loopholes. **`confident` is earned by a consulted corroborator, never by felt certainty: for any unit that mutates state or crosses a trust boundary, if no co-located test, caller, blame, or spec was actually read, the highest marker permitted is `plausible`.**
 
 The operational test: a piece of analysis is *understanding* only if it survives a semantic-preserving rewrite of the underlying code (rename a local, swap an equivalent loop form, replace an `if/else` with a ternary). If the rewrite would change your answer, you produced *paraphrase*. *(Operational definition adapted from arXiv 2504.04372 2025; preprint, applied as a working test rather than as authority.)*
 
@@ -87,7 +87,7 @@ For each meaningful unit (function, type, branch, module boundary, non-trivial c
 
 1. **What (mechanical)** — runtime behavior in one sentence. Code-level: input → transformation → output.
 2. **What (domain intent)** — what problem this solves in the application's domain. Different from mechanical: the domain answer is "checkout total with sales tax", not "sums an array and multiplies by 1.0825".
-3. **Why** — the constraint, historical reason, or invariant that justifies the code's shape. Mark certainty per claim: `confident` / `plausible` / `UNKNOWN — probe: <git blame / callers / tests / ADR>`. A unit may carry multiple `Why` claims at different certainties; list each as a separate line with its own marker. *(Letovsky 1986 — comprehension proceeds via inquiry episodes with certainty levels.)*
+3. **Why** — the constraint, historical reason, or invariant that justifies the code's shape. Mark certainty per claim: `confident` / `plausible` / `UNKNOWN — probe: <git blame / callers / tests / ADR>`. `confident` requires that the named corroborator was actually consulted, not inferred from the code's shape; absent that, use `plausible`. A unit may carry multiple `Why` claims at different certainties; list each as a separate line with its own marker. *(Letovsky 1986 — comprehension proceeds via inquiry episodes with certainty levels.)*
 4. **Invariants** — what must hold for this code to be correct. Beyond types: caller discipline, ordering, lock state, transaction state, freshness windows.
 5. **Failure modes** — what happens when invariants fail: silent corruption, panic, wrong result, deadlock, data leak, resource exhaustion.
 6. **Connections (←) backward slice** — what affects this unit. Inputs, mutable state read, environment, feature flags, side-channel reads. *(Weiser 1984, "Program Slicing" — backward direction.)*
@@ -192,7 +192,7 @@ The skill is complete when:
 
 - A module hypothesis was stated before unit-level analysis began, and its verdict (confirmed / refined / refuted) is at the end of the review.
 - Every meaningful unit has all seven fields filled, or `What (mechanical)` and `What (domain intent)` collapsed to one line *only* after the operational test, or the unit is explicitly marked `skipped because: <reason>`.
-- Every `Why` carries a certainty marker (`confident` / `plausible` / `UNKNOWN — probe: …`).
+- Every `Why` carries a certainty marker (`confident` / `plausible` / `UNKNOWN — probe: …`), and every `confident` marker on a state-mutating or trust-boundary unit names the corroborator that was consulted (test / caller / blame / spec / ADR).
 - Open questions and risk hotspots are listed at the end.
 - The user has enough material to decide *whether* and *how* to proceed with implementation.
 
