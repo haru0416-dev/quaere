@@ -1199,6 +1199,34 @@
           "text": "I changed"
         }
       ]
+    },
+    {
+      "id": "semantic-comprehension-quality",
+      "skill": "quaere-semantic",
+      "prompt": "Read src/rate_limit.ts deeply and explain, per meaningful unit, the mechanical behavior, the domain intent, the invariants, and the failure modes. Use the co-located test and comments to ground your claims. Do not change the code.",
+      "workspace": "../eval-fixtures/quaere-semantic-comprehension",
+      "expected": [
+        "describes the refill as continuous/fractional (proportional to elapsed time), not a fixed number per interval or a refill-to-full",
+        "names the capacity-clamp invariant (a long idle cannot burst beyond capacity)",
+        "names the fractional-remainder-carry invariant (no truncation loss across frequent calls)",
+        "grounds intent in the co-located comment and test rather than marking it UNKNOWN",
+        "does not paraphrase the mechanism incorrectly"
+      ],
+      "assertions": [
+        {
+          "name": "outcome: correct, corroborated comprehension of the limiter (llm-judged)",
+          "type": "llm_judge",
+          "axis": "outcome",
+          "model": "gpt-5.5",
+          "rubric": "You are grading a semantic code review of src/rate_limit.ts, a token-bucket rate limiter. The workspace INCLUDES a co-located test (rate_limit.test.ts) and an explanatory comment, so intent and invariants CAN be confirmed — a good review reads them and grounds its claims rather than marking intent UNKNOWN.\n\nGROUND TRUTH the review must get right:\n- Refill is CONTINUOUS and FRACTIONAL: each allow(now) adds (elapsed / refillIntervalMs) tokens — a fractional amount proportional to elapsed time — NOT a fixed integer number of tokens per interval, and NOT a refill-to-full.\n- Invariant 1 (capacity clamp): tokens are clamped to capacity, so a long idle period cannot produce a burst larger than capacity.\n- Invariant 2 (fractional carry): consuming does tokens -= 1, keeping the fractional remainder, so frequent small calls do not lose tokens to truncation.\n- Failure modes: removing the clamp allows post-idle bursts; truncating the remainder loses tokens / under-allows under frequent calls.\n\nRespond PASS if the review (a) describes the refill as continuous/proportional/fractional (not fixed-per-interval or refill-to-full), (b) names BOTH the capacity-clamp invariant AND the fractional-carry invariant (or clearly equivalent descriptions), and (c) grounds intent in the comment/test (treats it as known, with the corroborator named) rather than asserting UNKNOWN. Respond FAIL if the review paraphrases the mechanism as a fixed-rate or refill-to-full bucket, misses either invariant, or marks intent UNKNOWN despite the comment and test being present. Answer PASS or FAIL on the first line, then one sentence ending with 'because <one-clause>'."
+        },
+        {
+          "name": "Why claims carry a certainty marker",
+          "type": "requires_pair",
+          "if_contains": "(?i)Why\\s*:",
+          "must_also_contain": "(?i)confident|plausible|UNKNOWN"
+        }
+      ]
     }
   ]
 }
