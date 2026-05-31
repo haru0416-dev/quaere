@@ -30,3 +30,5 @@ evals/.llm_judge_cache/
 # Internal-only decision records and eval-driven analysis tasks
 docs/adr/
 docs/eval-tasks/
+docs/slides/
+docs/skill-behavior-on-terminal-bench.md
