@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import atexit
+import contextlib
 import datetime as dt
 import hashlib
 import json
@@ -12,6 +14,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -27,6 +30,13 @@ DEFAULT_OUTPUT_DIR = ROOT / "eval-results"
 DEFAULT_LLM_JUDGE_CACHE = ROOT / "evals" / ".llm_judge_cache"
 DEFAULT_LLM_JUDGE_MODEL = "claude-haiku-4-5-20251001"
 SAFE_COMPONENT = re.compile(r"^[A-Za-z0-9_.-]+$")
+# Skill directories an Agent-Skills-aware CLI (Codex, Claude Code) auto-discovers
+# at runtime. `--isolate-skills` relocates these for the sweep so a baseline run
+# cannot silently read an installed SKILL.md the prompt deliberately omitted.
+INSTALLED_SKILL_DIRS = [
+    Path.home() / ".agents" / "skills",
+    Path.home() / ".claude" / "skills",
+]
 
 
 def require_safe_component(value: str, label: str, path: Path | None = None, index: int | None = None) -> None:
@@ -1378,7 +1388,80 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Exit non-zero if any run was graded manual-only (no deterministic assertions evaluated).",
     )
+    parser.add_argument(
+        "--isolate-skills",
+        action="store_true",
+        help=(
+            "Temporarily relocate installed skill dirs (~/.agents/skills, "
+            "~/.claude/skills) for the duration of the sweep so the runner cannot "
+            "auto-discover them. Required for an uncontaminated baseline: without "
+            "it, Codex reads ~/.agents/skills/<skill>/SKILL.md even in baseline "
+            "mode. Restored on exit, exception, and SIGINT/SIGTERM."
+        ),
+    )
     return parser.parse_args(argv)
+
+
+@contextlib.contextmanager
+def isolated_installed_skills(enabled: bool, dirs: list[Path]):
+    """Relocate installed skill dirs for the sweep so the runner cannot auto-load them.
+
+    Without this, `--mode baseline` is contaminated: an Agent-Skills-aware CLI such
+    as Codex discovers and reads ~/.agents/skills/<skill>/SKILL.md on its own even
+    though `build_prompt` omitted the skill, which compresses the measured
+    baseline-vs-skill delta. Relocation is restored on normal exit, on exception
+    (finally), on interpreter exit (atexit), and on SIGINT/SIGTERM.
+    """
+    if not enabled:
+        yield
+        return
+
+    moved: list[tuple[Path, Path]] = []
+
+    def restore() -> None:
+        while moved:
+            src, bak = moved.pop()
+            try:
+                if bak.exists() and not src.exists():
+                    bak.rename(src)
+                    print(f"--isolate-skills: restored {src}", file=sys.stderr)
+            except OSError as exc:  # pragma: no cover - defensive
+                print(f"WARNING: could not restore {src} from {bak}: {exc}", file=sys.stderr)
+
+    for d in dirs:
+        if d.exists():
+            bak = d.with_name(f"{d.name}.quaere-isolated-{os.getpid()}")
+            if bak.exists():
+                shutil.rmtree(bak)
+            d.rename(bak)
+            moved.append((d, bak))
+            print(f"--isolate-skills: relocated {d} (restored on exit)", file=sys.stderr)
+
+    atexit.register(restore)
+    prev_handlers: dict[int, Any] = {}
+
+    def _on_signal(signum, _frame):
+        restore()
+        handler = prev_handlers.get(signum, signal.SIG_DFL)
+        signal.signal(signum, handler)
+        os.kill(os.getpid(), signum)
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            prev_handlers[sig] = signal.getsignal(sig)
+            signal.signal(sig, _on_signal)
+        except (ValueError, OSError):  # pragma: no cover - non-main thread / unsupported
+            pass
+
+    try:
+        yield
+    finally:
+        restore()
+        for sig, handler in prev_handlers.items():
+            try:
+                signal.signal(sig, handler)
+            except (ValueError, OSError):  # pragma: no cover
+                pass
 
 
 def main(argv: list[str]) -> int:
@@ -1398,35 +1481,36 @@ def main(argv: list[str]) -> int:
 
     total_runs = 1 if args.dry_run else max(1, args.runs)
 
-    for runner in args.runner:
-        for scenario in scenarios:
-            for mode in args.mode:
-                workspace_source = args.workspace_source
-                if workspace_source is not None:
-                    workspace_source = workspace_source.resolve()
-                else:
-                    workspace_source = resolve_scenario_workspace(scenario, args.scenarios)
-                for run_index in range(1, total_runs + 1):
-                    job = create_job(
-                        runner=runner,
-                        scenario=scenario,
-                        mode=mode,
-                        output_root=output_root,
-                        skills_dir=args.skills_dir,
-                        workspace_source=workspace_source,
-                        run_index=run_index,
-                        total_runs=total_runs,
-                    )
-                    result = run_job(
-                        job,
-                        timeout_seconds=args.timeout,
-                        dry_run=args.dry_run,
-                        enable_llm_judge=args.enable_llm_judge,
-                        llm_judge_cache_dir=args.llm_judge_cache_dir,
-                        llm_judge_backend=args.llm_judge_backend,
-                        llm_judge_base_url=args.llm_judge_base_url,
-                    )
-                    results.append(result)
+    with isolated_installed_skills(args.isolate_skills, INSTALLED_SKILL_DIRS):
+        for runner in args.runner:
+            for scenario in scenarios:
+                for mode in args.mode:
+                    workspace_source = args.workspace_source
+                    if workspace_source is not None:
+                        workspace_source = workspace_source.resolve()
+                    else:
+                        workspace_source = resolve_scenario_workspace(scenario, args.scenarios)
+                    for run_index in range(1, total_runs + 1):
+                        job = create_job(
+                            runner=runner,
+                            scenario=scenario,
+                            mode=mode,
+                            output_root=output_root,
+                            skills_dir=args.skills_dir,
+                            workspace_source=workspace_source,
+                            run_index=run_index,
+                            total_runs=total_runs,
+                        )
+                        result = run_job(
+                            job,
+                            timeout_seconds=args.timeout,
+                            dry_run=args.dry_run,
+                            enable_llm_judge=args.enable_llm_judge,
+                            llm_judge_cache_dir=args.llm_judge_cache_dir,
+                            llm_judge_backend=args.llm_judge_backend,
+                            llm_judge_base_url=args.llm_judge_base_url,
+                        )
+                        results.append(result)
 
     finalize_cross_mode_assertions(results)
 
