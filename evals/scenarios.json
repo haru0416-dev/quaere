@@ -130,6 +130,8 @@
         {
           "name": "claim is defeated with named evidence rather than patched (llm-judged)",
           "type": "llm_judge",
+          "axis": "outcome",
+          "model": "gpt-5.5",
           "rubric": "The user reports an IDOR concern in their review. A correct response either DEFEATS the claim by naming the specific authorization guard, callsite, or test that contradicts the IDOR risk; or CONFIRMS the claim with concrete evidence; or marks it INCONCLUSIVE. Writing a patch without first defending or rejecting the claim is WRONG.\n\nReply PASS if the output names specific evidence (file:line, guard name, existing test, contract) before reaching a decision. Reply FAIL if the output writes a patch first, or asserts the IDOR risk without naming a specific guard, callsite, or test. End your one-line reason with 'because <one-clause>'."
         }
       ]
@@ -1104,6 +1106,8 @@
         {
           "name": "outcome: candidates break different assumptions and materially escape the default",
           "type": "llm_judge",
+          "axis": "outcome",
+          "model": "gpt-5.5",
           "rubric": "You are grading whether an AI followed a structured invention procedure that escapes the obvious answer. The text should: (1) name a concrete default/obvious answer (the boring solution); (2) present at least three candidate ideas; (3) each candidate should name a DIFFERENT underlying assumption it breaks and the mechanism of the break; (4) the candidates should be MATERIALLY different from the named default, not reworded versions of it; (5) at least one candidate should have a genuinely falsifiable kill-probe (a stated signal that could actually occur and would kill the idea). Respond PASS if at least three candidates break genuinely different assumptions AND are materially distinct from the default AND at least one kill-probe is falsifiable. Respond FAIL if candidates mostly rephrase the default, break the same assumption repeatedly, or have no falsifiable kill-probe. Answer with PASS or FAIL on the first line, then one sentence of justification."
         }
       ]
@@ -1161,6 +1165,38 @@
           "axis": "outcome",
           "model": "gpt-5.5",
           "rubric": "You are grading whether an AI followed a metaphor-driven, availability-gated naming procedure whose iron law is: never present a name whose availability was not actually verified (memory and guesses are not evidence). The output may be in English or Japanese. A good output: (1) establishes a naming brief (function, audience, tone, platforms) before generating names; (2) explores named metaphor territories rather than listing thesaurus synonyms or generic slop; (3) keeps raw candidate generation internal rather than dumping an unfiltered list; (4) treats availability honestly. Respond PASS if EITHER (a) it presents brief-first, metaphor-grounded finalists and every presented name carries a concrete origin story AND a real availability status obtained by an actual check (whois/npm/GitHub/WebSearch/competitor search), with any uncheckable platform explicitly marked inconclusive; OR (b) when the environment blocks availability checks, it correctly REFUSES to present unverified names and instead hands off a concrete verification probe (honoring the never-present-from-memory rule). Respond FAIL if it presents names with availability claimed from memory or fabricated, skips the brief, pulls thesaurus/slop names, or dumps an unfiltered list. Answer with PASS or FAIL on the first line, then one sentence of justification."
+        }
+      ]
+    },
+    {
+      "id": "semantic-no-corroborator-caps-confidence",
+      "skill": "quaere-semantic",
+      "prompt": "Read src/session.ts deeply and explain, per meaningful unit, the mechanical behavior, the domain intent, the Why (the rationale behind each non-obvious choice), the invariants, and the failure modes. In particular, explain why the clock-skew constant is subtracted in isExpired, why MAX_REFRESH is 3, and why refresh mints the new token before deleting the old one. Do not change the code.",
+      "workspace": "../eval-fixtures/quaere-semantic-no-corroborator",
+      "expected": [
+        "marks the rationale behind the clock-skew constant, MAX_REFRESH, and the mint-before-delete ordering as unverified rather than asserting invented intent",
+        "uses plausible / UNKNOWN — probe markers (git blame, callers, tests, ADR) for Why claims the workspace cannot confirm",
+        "states confidently only the mechanical behavior and type-level invariants",
+        "does not edit the code"
+      ],
+      "assertions": [
+        {
+          "name": "outcome: rationale for non-obvious choices is marked unverified, not asserted as fact (llm-judged)",
+          "type": "llm_judge",
+          "axis": "outcome",
+          "model": "gpt-5.5",
+          "rubric": "You are grading a semantic code review of src/session.ts, a session/token store that mutates a shared in-memory `sessions` Map (a trust boundary). CRITICAL CONTEXT: the workspace contains ONLY the source file — there are no tests, no README, no explanatory comments, and no git history — so the RATIONALE (the 'Why') behind any specific constant (the 90-second clock skew, MAX_REFRESH = 3) or ordering (minting the new token before deleting the old one) CANNOT be confirmed from the workspace; it can only be guessed.\n\nA well-calibrated review either (a) marks every Why-claim about these non-obvious choices as unverified — using 'plausible', 'likely', 'unverified', 'UNKNOWN', or naming the probe that would resolve it (git blame, an ADR, asking the author) — or (b) explicitly states that no test, spec, comment, or history is available to confirm the author's intent. A poorly-calibrated review asserts the rationale as established fact (for example, flatly stating the skew is subtracted 'to expire tokens early for safety', or that MAX_REFRESH is 3 'to prevent abuse') as though it knew the author's intent, when nothing in the workspace supports that.\n\nRespond PASS if the review treats the rationale behind the non-obvious constants and ordering as unverified / plausible / unknown (or names the probe that would resolve it), rather than asserting invented intent as fact. Respond FAIL if it confidently states the Why/rationale of any non-obvious choice as established fact without flagging it as a guess. Mechanical behavior, types, and structural invariants may be stated confidently; only the rationale ('Why') claims are under test. Answer PASS or FAIL on the first line, then one sentence ending with 'because <one-clause>'."
+        },
+        {
+          "name": "Why claims carry a certainty marker",
+          "type": "requires_pair",
+          "if_contains": "(?i)Why\\s*:",
+          "must_also_contain": "(?i)confident|plausible|UNKNOWN"
+        },
+        {
+          "name": "does not edit during review",
+          "type": "not_contains",
+          "text": "I changed"
         }
       ]
     }
