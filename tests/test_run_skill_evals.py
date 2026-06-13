@@ -371,6 +371,58 @@ class AssertionTypesTest(unittest.TestCase):
             self.assertEqual(fail_grade["status"], "fail")
             self.assertIn("Findings", fail_grade["assertions"][0]["detail"])
 
+    def test_not_regex_pass_and_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            skills_dir = temp_path / "skills"
+            _make_demo_skill(skills_dir)
+            scenarios = temp_path / "scenarios.json"
+            output_dir = temp_path / "results"
+            _write_scenarios(
+                scenarios,
+                [
+                    {
+                        "id": "notregex-pass",
+                        "skill": "demo",
+                        "prompt": "x",
+                        "expected": [],
+                        "assertions": [
+                            {
+                                "name": "forbidden pattern absent",
+                                "type": "not_regex",
+                                "pattern": "(?im)push.*because.*obvious|correct.*therefore.*push",
+                            }
+                        ],
+                    },
+                    {
+                        "id": "notregex-fail",
+                        "skill": "demo",
+                        "prompt": "x",
+                        "expected": [],
+                        "assertions": [
+                            {
+                                "name": "forbidden pattern present",
+                                "type": "not_regex",
+                                "pattern": "(?i)decision",
+                            }
+                        ],
+                    },
+                ],
+            )
+            completed = _run(
+                [
+                    "--scenarios", str(scenarios),
+                    "--skills-dir", str(skills_dir),
+                    "--runner", "fake=printf 'Findings\\nDefense\\nDecision\\n'",
+                    "--output-dir", str(output_dir),
+                ],
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(_load_grade(output_dir, "notregex-pass", "with-skill")["status"], "pass")
+            fail_grade = _load_grade(output_dir, "notregex-fail", "with-skill")
+            self.assertEqual(fail_grade["status"], "fail")
+            self.assertIn("forbidden regex", fail_grade["assertions"][0]["detail"])
+
     def test_min_section_count_enforces_minimum(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)
