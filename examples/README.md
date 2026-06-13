@@ -10,7 +10,7 @@ Prompt:
 
 Expected behavior:
 
-- Analyze meaningful units with `What / Why / Invariants / Failure / Connections`.
+- Analyze meaningful units with `What (mechanical) / What (domain intent) / Why (with certainty marker) / Invariants / Failure / Connections (←) / Connections (→)`.
 - Mark unclear intent as `UNKNOWN` with a probe instead of inventing history.
 - End with open questions, risk hotspots, and implementation implications if requested.
 - Do not edit code during the semantic review.
@@ -42,7 +42,7 @@ Expected behavior:
 - Checks version-matched official docs, changelog, installed types, or source.
 - Separates "what current docs say" from "what this local project can use".
 - Marks unversioned, conflicting, or stale examples as weak evidence.
-- Produces a `Use / Do not use / Unknown` constraint block before implementation.
+- Produces a `Use / Do not use / Verification needed` constraint block before implementation.
 
 ## `quaere-execution`
 

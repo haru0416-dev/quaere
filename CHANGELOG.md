@@ -4,6 +4,27 @@ All notable changes to Quaere are documented in this file. The format follows [K
 
 ## [Unreleased]
 
+### Added
+
+- **`quaere-naming` extension** — a metaphor-driven naming skill: naming brief before any name, conceptual territories instead of thesaurus synonyms, anti-pattern filtering, and a mandatory tool-verified availability gate (never from memory). Opt-in: `quaere install --skill naming`.
+- **Two semantic eval fixtures** — `no-corroborator` (no tests, comments, history, or spec available; the honest output is `plausible` / `UNKNOWN`, not invented intent) and `comprehension-quality` (grades the depth of per-unit analysis, not just its shape).
+- **`--isolate-skills` eval flag** — relocates installed skills for the duration of a sweep so a baseline run cannot silently read them; without it, "baseline" numbers are contaminated by whatever is already installed.
+- **Outcome-axis judge on every scenario** — all 22 eval scenarios now carry at least one `llm_judge` assertion tagged `axis: outcome` (was 5/22), so the paired baseline-vs-skill comparison has an outcome signal everywhere, not just form checks.
+- **`not_regex` assertion type** — negative regex matching for the eval harness; four previously vacuous safety assertions (regex strings passed to the literal `not_contains`) were converted and now actually fire.
+
+### Changed
+
+- **`quaere-semantic` distilled to its measured active core** — 256 → 148 lines vs v0.3.1, keeping only the content that ablation showed carries the outcome.
+- **`confident` / `locally novel` certainty labels now require a probe.** `quaere-semantic` grants `confident` only when a named corroborator (test, caller, `git blame`, spec, ADR) was actually consulted, and `quaere-invention` grants `locally novel` only when the candidate carries a falsifiable kill-probe — neither label can be earned by self-assessment.
+- **All prescriptive content now sits within the Codex read cap.** `quaere-evidence` compressed 322 → 260 lines (workflow steps 5–9, including the patch-authorization gate and Decision labels, previously sat past line 220 and were structurally unread on the Codex path); `quaere-audit` gained an in-cap 7-condition Confirmation Rule summary (conditions 2–7 previously truncated mid-list); `quaere-grounding` gained an in-cap no-network-fallback compact form and a deliverable-template pointer. Only the sanctioned full Handoff/Stop sections and reference pointers remain past the cap.
+- **Certainty-label loopholes closed.** `quaere-evidence`'s lightweight pass now uses the canonical Decision labels (`confirmed | rejected | inconclusive | deferred`, was `accept | reject`) and forbids `confirmed` while the disconfirming probe is `"not yet run"`; `quaere-audit` Triage condition 3 requires naming what was actually consulted, else the finding caps at `potential`; `quaere-grounding`'s Decision label set is unified across all sites (adds `documented` / `local-only`, retires the phantom `single-source` label); `quaere-semantic`'s module-hypothesis verdict renamed `held` (was `confirmed` — that word is reserved for probe-gated claims) and its handoff `Confirmed inputs` are scoped to corroborator-backed fields; `quaere-naming` gained an `unverified (checks blocked)` branch so blocked availability checks are never presented as `free`.
+- **`quaere-invention` candidate IDs renamed `K-N`** (was `C-N`, which collided with `quaere-evidence`'s Review Claim `C-N` across an explicit handoff); `locally novel` is emitted as `locally novel (unprobed)` until its kill-probe has run downstream.
+- **Validator hardened** — the `.agent-state` check is git-aware (no more false positives on local gitignored state), broken relative references in skill bodies are detected, `README.ja.md` coverage is enforced, and `quaere-naming` / the audit Confirmation Rule joined the required-blocks list.
+
+### Fixed
+
+- **`check-availability.sh` default platform expansion** — with no platform arguments the script checked nothing and exited 0; it now expands to `domain github npm` and exits non-zero on unknown platforms.
+
 ## [0.5.0] — 2026-05-30
 
 Quaere splits into a core set plus opt-in extensions, adds a new `quaere-invention` extension, and reorganizes every skill body so the prescriptive content survives Codex CLI's ~220-line SKILL.md read cap. The install default changed and the skill bodies changed.
@@ -359,7 +380,13 @@ rm -rf ~/.claude/skills/{semantic-review,external-grounding,evidence-gated-revie
 curl -fsSL https://raw.githubusercontent.com/haru0416-dev/quaere/main/scripts/install.sh | sh
 ```
 
-[Unreleased]: https://github.com/haru0416-dev/quaere/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/haru0416-dev/quaere/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/haru0416-dev/quaere/compare/v0.4.1...v0.5.0
+[0.4.1]: https://github.com/haru0416-dev/quaere/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/haru0416-dev/quaere/compare/v0.3.2...v0.4.0
+[0.3.2]: https://github.com/haru0416-dev/quaere/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/haru0416-dev/quaere/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/haru0416-dev/quaere/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/haru0416-dev/quaere/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/haru0416-dev/quaere/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/haru0416-dev/quaere/releases/tag/v0.1.0
