@@ -4,6 +4,10 @@ All notable changes to Quaere are documented in this file. The format follows [K
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-06-13
+
+Adds the `quaere-naming` extension and tightens the existing skills: every prescriptive gate now sits within Codex CLI's ~220-line SKILL.md read cap, the certainty labels (`confirmed` / `confident` / `locally novel`) can no longer be claimed without the probe that earns them, and the eval harness gains an outcome-axis judge on every scenario plus a `not_regex` assertion type. The CLI interface is unchanged; the published headline numbers still come from the v0.3.1 sweep and predate these skill-body changes.
+
 ### Added
 
 - **`quaere-naming` extension** — a metaphor-driven naming skill: naming brief before any name, conceptual territories instead of thesaurus synonyms, anti-pattern filtering, and a mandatory tool-verified availability gate (never from memory). Opt-in: `quaere install --skill naming`.
@@ -380,7 +384,8 @@ rm -rf ~/.claude/skills/{semantic-review,external-grounding,evidence-gated-revie
 curl -fsSL https://raw.githubusercontent.com/haru0416-dev/quaere/main/scripts/install.sh | sh
 ```
 
-[Unreleased]: https://github.com/haru0416-dev/quaere/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/haru0416-dev/quaere/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/haru0416-dev/quaere/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/haru0416-dev/quaere/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/haru0416-dev/quaere/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/haru0416-dev/quaere/compare/v0.3.2...v0.4.0
