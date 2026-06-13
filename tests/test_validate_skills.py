@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import shutil
+import subprocess
 import sys
 import unittest
 from contextlib import redirect_stdout
@@ -37,6 +39,7 @@ def _write_skill(
     compatibility: str = "claude-code",
     line_padding: int = 0,
     override_name: str | None = None,
+    extra_body: list[str] | None = None,
 ) -> Path:
     skill_dir = skills_dir / name
     skill_dir.mkdir(parents=True)
@@ -63,6 +66,8 @@ def _write_skill(
         "",
         "Body.",
     ]
+    if extra_body:
+        body_lines.extend(extra_body)
     body_lines.extend(["padding"] * line_padding)
     (skill_dir / "SKILL.md").write_text("\n".join(body_lines) + "\n", encoding="utf-8")
     return skill_dir
@@ -120,6 +125,7 @@ def _run_main(tmp_root: Path) -> tuple[int, str]:
         ROOT=tmp_root,
         SKILLS_DIR=tmp_root / "skills",
         README=tmp_root / "README.md",
+        README_JA=tmp_root / "README.ja.md",
         EXAMPLES=tmp_root / "examples" / "README.md",
         SCENARIOS=tmp_root / "evals" / "scenarios.json",
     ), redirect_stdout(captured):
@@ -311,6 +317,84 @@ class ValidateSkillTest(unittest.TestCase):
             _write_repo(root, skills=["sample-skill"], examples="## `other-thing`\n")
             errors = self._validate(root)
         self.assertTrue(any("missing example section" in e for e in errors))
+
+    def test_quaere_naming_required_blocks_pass_when_present(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "skills").mkdir()
+            _write_skill(
+                root / "skills",
+                "quaere-naming",
+                extra_body=[
+                    "",
+                    "### 4. Availability gate",
+                    "",
+                    "Every finalist carries a tool-verified availability status.",
+                    "",
+                    "## Handoff to other skills",
+                    "",
+                    "Switch out once the name is settled.",
+                ],
+            )
+            _write_repo_extras(root, ["quaere-naming"])
+            errors = self._validate(root, skill_name="quaere-naming")
+        self.assertEqual(errors, [])
+
+    def test_quaere_naming_missing_availability_gate_is_detected(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "skills").mkdir()
+            _write_skill(
+                root / "skills",
+                "quaere-naming",
+                extra_body=[
+                    "",
+                    "Every finalist carries a tool-verified availability status.",
+                    "",
+                    "## Handoff to other skills",
+                    "",
+                    "Switch out once the name is settled.",
+                ],
+            )
+            _write_repo_extras(root, ["quaere-naming"])
+            errors = self._validate(root, skill_name="quaere-naming")
+        self.assertTrue(
+            any("availability gate step" in e for e in errors),
+            f"errors were: {errors}",
+        )
+
+    def test_broken_relative_reference_is_detected(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "skills").mkdir()
+            _write_skill(
+                root / "skills",
+                "sample-skill",
+                extra_body=["", "See references/missing.md for the rubric."],
+            )
+            _write_repo_extras(root, ["sample-skill"])
+            errors = self._validate(root)
+        self.assertTrue(
+            any("broken relative reference" in e and "references/missing.md" in e for e in errors),
+            f"errors were: {errors}",
+        )
+
+    def test_resolving_relative_reference_passes(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "skills").mkdir()
+            skill_dir = _write_skill(
+                root / "skills",
+                "sample-skill",
+                extra_body=["", "See references/worked-example.md for the rubric."],
+            )
+            (skill_dir / "references").mkdir()
+            (skill_dir / "references" / "worked-example.md").write_text(
+                "# Worked example\n", encoding="utf-8"
+            )
+            _write_repo_extras(root, ["sample-skill"])
+            errors = self._validate(root)
+        self.assertEqual(errors, [])
 
     def test_missing_scenario_is_detected(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -570,6 +654,40 @@ class LoadScenarioSkillsTest(unittest.TestCase):
             )
         self.assertTrue(any("missing required key 'text'" in e for e in errors))
 
+    def test_not_regex_assertion_is_accepted(self) -> None:
+        with TemporaryDirectory() as tmp:
+            _, errors = self._load(
+                {
+                    "scenarios": [
+                        {
+                            "id": "x",
+                            "skill": "s",
+                            "expected": ["y"],
+                            "assertions": [{"type": "not_regex", "pattern": "(?i)forbidden"}],
+                        }
+                    ]
+                },
+                Path(tmp),
+            )
+        self.assertEqual(errors, [])
+
+    def test_not_regex_assertion_missing_pattern_is_rejected(self) -> None:
+        with TemporaryDirectory() as tmp:
+            _, errors = self._load(
+                {
+                    "scenarios": [
+                        {
+                            "id": "x",
+                            "skill": "s",
+                            "expected": ["y"],
+                            "assertions": [{"type": "not_regex"}],
+                        }
+                    ]
+                },
+                Path(tmp),
+            )
+        self.assertTrue(any("missing required key 'pattern'" in e for e in errors))
+
     def test_exit_code_assertion_does_not_require_extra_keys(self) -> None:
         with TemporaryDirectory() as tmp:
             _, errors = self._load(
@@ -615,6 +733,66 @@ class ValidateMainTest(unittest.TestCase):
             rc, out = _run_main(root)
         self.assertEqual(rc, 1)
         self.assertIn("local investigation state should not be committed", out)
+
+    @unittest.skipUnless(shutil.which("git"), "git not available")
+    def test_untracked_agent_state_in_git_work_tree_passes(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_repo(root, skills=["alpha-skill"], group="core")
+            subprocess.run(
+                ["git", "init", "--quiet"], cwd=root, check=True, capture_output=True
+            )
+            (root / ".gitignore").write_text(".agent-state/\n", encoding="utf-8")
+            (root / ".agent-state").mkdir()
+            (root / ".agent-state" / "notes.md").write_text("local", encoding="utf-8")
+            rc, out = _run_main(root)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("Skill validation passed", out)
+
+    @unittest.skipUnless(shutil.which("git"), "git not available")
+    def test_tracked_agent_state_in_git_work_tree_is_detected(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_repo(root, skills=["alpha-skill"], group="core")
+            subprocess.run(
+                ["git", "init", "--quiet"], cwd=root, check=True, capture_output=True
+            )
+            (root / ".agent-state").mkdir()
+            (root / ".agent-state" / "notes.md").write_text("local", encoding="utf-8")
+            subprocess.run(
+                [
+                    "git",
+                    "-c", "user.email=test@example.com",
+                    "-c", "user.name=Test",
+                    "add", ".agent-state/notes.md",
+                ],
+                cwd=root,
+                check=True,
+                capture_output=True,
+            )
+            rc, out = _run_main(root)
+        self.assertEqual(rc, 1)
+        self.assertIn("local investigation state should not be committed", out)
+
+    def test_readme_ja_missing_reference_is_detected(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_repo(root, skills=["alpha-skill"], group="core")
+            (root / "README.ja.md").write_text("# テスト\n\n何もない。\n", encoding="utf-8")
+            rc, out = _run_main(root)
+        self.assertEqual(rc, 1)
+        self.assertIn("README.ja.md: missing reference to skills/core/alpha-skill", out)
+
+    def test_readme_ja_with_reference_passes(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_repo(root, skills=["alpha-skill"], group="core")
+            (root / "README.ja.md").write_text(
+                "# テスト\n\n- [skills/core/alpha-skill](skills/core/alpha-skill/SKILL.md)\n",
+                encoding="utf-8",
+            )
+            rc, out = _run_main(root)
+        self.assertEqual(rc, 0, out)
 
     def test_empty_skills_dir_is_rejected(self) -> None:
         with TemporaryDirectory() as tmp:
