@@ -754,6 +754,10 @@ def evaluate_assertion(
         pattern = str(assertion.get("pattern", ""))
         ok = re.search(pattern, output, flags=re.MULTILINE) is not None
         detail = f"required regex {pattern!r}"
+    elif assertion_type == "not_regex":
+        pattern = str(assertion.get("pattern", ""))
+        ok = re.search(pattern, output, flags=re.MULTILINE) is None
+        detail = f"forbidden regex {pattern!r}"
     elif assertion_type == "exit_code":
         expected = assertion.get("value", 0)
         ok = metadata.get("exit_code") == expected
