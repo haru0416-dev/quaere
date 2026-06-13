@@ -12,6 +12,8 @@ Quaere is four core [skills](https://docs.claude.com/en/docs/claude-code/skills)
 
 > Quaere is an independent project, not affiliated with or endorsed by Anthropic. The skills run through Claude Code's and Codex CLI's built-in skill systems.
 
+The name is Latin *quaere* — *to ask, to seek, to inquire*. The point is not more process; it is to wedge one move — *make a claim, defend it with evidence, then act* — in at the spots where agents drift.
+
 ```text
 Without Quaere: plausible claim -> broad patch -> partial test -> confident summary
 With Quaere:    claim -> evidence -> disconfirming probe -> scoped patch -> verified diff
@@ -221,7 +223,7 @@ Run the skills validator before publishing changes:
 python scripts/validate_skills.py
 ```
 
-It checks frontmatter, directory/name consistency, README coverage, line-count budget, and accidental `.agent-state/` inclusion. GitHub Actions runs the same validation on push and pull request.
+It checks frontmatter, directory/name consistency, README and README.ja coverage, reachability-anchor positions within the Codex read cap, the line-count budget, that reference links resolve, and accidental `.agent-state/` inclusion. GitHub Actions runs the same validation on push and pull request.
 
 For changes under `cli/` (the npm package), run the local check pipeline before committing:
 
