@@ -1,8 +1,8 @@
 # Quaere skill evaluation harness
 
-This directory contains the in-tree evaluation suite that measures the effect of each Quaere skill on a coding agent. The headline number lives in the [root README](../README.md#why-quaere); this document describes how to run the suite, what each assertion means, and how the `llm_judge` backends behave.
+This directory contains the in-tree evaluation suite that measures the effect of each Quaere skill on a coding agent. The headline number lives in the [root README](../README.md#measured-effect); this document describes how to run the suite, what each assertion means, and how the `llm_judge` backends behave.
 
-The runner is `run_skill_evals.py`. The canonical scenarios are in `scenarios.json` (18 prompts, seven of which use workspace fixtures under [`../eval-fixtures/`](../eval-fixtures/)). The runner copies each fixture into an isolated directory per run so concurrent evaluations do not interfere.
+The runner is `run_skill_evals.py`. The canonical scenarios are in `scenarios.json` (22 prompts, nine of which use workspace fixtures under [`../eval-fixtures/`](../eval-fixtures/)). The runner copies each fixture into an isolated directory per run so concurrent evaluations do not interfere.
 
 ## Running the suite
 
@@ -43,6 +43,10 @@ Scenarios carry deterministic `assertions` for CI-friendly checks, alongside a m
 | `llm_judge` | LLM grades the output against a free-form `rubric`; opt-in via `--enable-llm-judge`. Returns `pass` / `fail` / `manual` based on the judge's response and is skipped (`status: "skipped"`) when the flag is off |
 
 The `skip_when` clause on `requires_pair` lets an assertion treat a labeled skip branch (e.g. `Final gate: skipped because <reason>`) as vacuously satisfied. Anchor `skip_when` tightly — the bare token `(?i)skipped` would silently flip fails to passes whenever the word appears anywhere in output.
+
+### Assertion axes
+
+Every assertion may additionally carry `"axis": "outcome"`. Untagged assertions default to the form axis: they check that the output has the right shape (labeled sections, ordering, vocabulary), not that the task actually ended in the right state. The paired baseline-vs-skill comparison in `run_skill_evals.py` — the exact-binomial McNemar over per-scenario majorities — runs on the outcome axis only, so form-axis passes never feed the headline pairing. Opting an assertion into the outcome axis is an explicit author act: tag it only when a pass genuinely means the real result is correct.
 
 ## llm_judge backends
 

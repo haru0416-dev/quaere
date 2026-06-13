@@ -8,7 +8,7 @@
 
 Coding agents rarely fail by saying "I do not know." They fail by sounding finished too early: they skim code, accept plausible claims, patch a wide diff, and report success before the cause is proven.
 
-Quaere is five [skills](https://docs.claude.com/en/docs/claude-code/skills) for Claude Code, Codex CLI, and other skill-aware coding agents. A skill is a markdown file the agent loads on demand based on task context — Quaere ships five, each one gating a different drift point: read the code semantically, ground external facts, prove claims, execute changes in small verified steps, and audit security properties before publishing findings.
+Quaere is four core [skills](https://docs.claude.com/en/docs/claude-code/skills) plus three opt-in extensions for Claude Code, Codex CLI, and other skill-aware coding agents. A skill is a markdown file the agent loads on demand based on task context — each core skill gates a different drift point: read the code semantically, ground external facts, prove claims, and execute changes in small verified steps. The extensions add security auditing, structured ideation, and naming on top.
 
 > Quaere is an independent project, not affiliated with or endorsed by Anthropic. The skills run through Claude Code's and Codex CLI's built-in skill systems.
 
@@ -17,19 +17,21 @@ Without Quaere: plausible claim -> broad patch -> partial test -> confident summ
 With Quaere:    claim -> evidence -> disconfirming probe -> scoped patch -> verified diff
 ```
 
-In the current in-tree eval sweep, the same scenarios scored **53%** assertion pass rate without the skills and **91%** with them. The eval is not a substitute for external benchmarks; it is a concrete regression harness for the failure modes Quaere is designed to catch.
+In the in-tree eval sweep measured at v0.3.1, the same scenarios scored **53%** assertion pass rate without the skills and **91%** with them. The eval is not a substitute for external benchmarks; it is a concrete regression harness for the failure modes Quaere is designed to catch.
 
 [Measured effect](#measured-effect) · [Skills](#skills) · [Picking a skill](#picking-a-skill) · [Installation](#installation) · [Docs](#docs) · [quaere.dev](https://quaere.dev/) · [日本語](README.ja.md)
 
 ## Measured effect
 
-The headline comes from the in-tree eval sweep against the shipped skill set (skill bodies have not changed since v0.3.1; the v0.3.x and v0.4.x releases reshaped the CLI and install pipeline, not the skills themselves):
+The headline comes from the in-tree eval sweep against the v0.3.1 skill set. Skill bodies have changed since the measurement: v0.5.0 reorganized every skill for the Codex read cap, and unreleased commits since then added the `quaere-naming` extension, distilled `quaere-semantic` to its measured active core, and gated the `confident` / `locally novel` certainty labels on an executed probe. The published sweep numbers predate those changes:
 
 | mode                | assertion pass rate | scenario-level     |
 | ------------------- | ------------------: | -----------------: |
 | Baseline (no skill) | 53% (56 / 106)      | 0 / 18 pass        |
 | **With skill**      | **91% (96 / 106)**  | **10 / 18 pass**   |
 | Δ                   | **+37.7 pp**        | **+10 scenarios**  |
+
+Measured at v0.3.1 on the 18-scenario / 106-assertion suite; the suite has since grown to 22 scenarios / 125 assertions. See [`docs/evaluation.md`](docs/evaluation.md) for measurement notes.
 
 The eval is a regression harness for Quaere's own failure modes, not a third-party benchmark. A separate Terminal-Bench sweep (`terminal-bench-core==0.1.1`, v0.3.2 install pipeline) reports two cuts:
 
@@ -68,7 +70,7 @@ installs the core set; extensions are installed on request
 
 | Skill | Use when | Main safeguard |
 | --- | --- | --- |
-| [`skills/core/quaere-semantic`](skills/core/quaere-semantic/SKILL.md) | You need to understand unfamiliar code, module intent, invariants, or why code is shaped a certain way before changing it. | Forces `What / Why / Invariants / Failure modes / Connections` per meaningful unit and marks unknown intent instead of inventing it. |
+| [`skills/core/quaere-semantic`](skills/core/quaere-semantic/SKILL.md) | You need to understand unfamiliar code, module intent, invariants, or why code is shaped a certain way before changing it. | Forces `What (mechanical) / What (domain intent) / Why / Invariants / Failure / Connections (← / →)` per meaningful unit and marks unknown intent instead of inventing it. |
 | [`skills/core/quaere-grounding`](skills/core/quaere-grounding/SKILL.md) | The task depends on external, version-sensitive facts: SDKs, APIs, libraries, CLIs, cloud services, security advisories, changelogs, release notes, or docs. | Anchors local versions, ranks source quality, checks version fit and conflicts, and turns confirmed external facts into implementation constraints. |
 | [`skills/core/quaere-evidence`](skills/core/quaere-evidence/SKILL.md) | You are handling unclear bugs, risky PR review, CI failures, flaky tests, security-sensitive changes, database/concurrency changes, external APIs, or claims that need evidence before patching. | Requires findings, hypotheses/claims, defense, disconfirming probes, decisions, verification, and handoff before accepting a fix. |
 | [`skills/core/quaere-execution`](skills/core/quaere-execution/SKILL.md) | You are authorized to implement a multi-step coding change, apply a plan, finish review feedback, or turn a specification into working code. | Enforces read → plan → execute → review → fix → verify → commit, with commits only when explicitly authorized. |
