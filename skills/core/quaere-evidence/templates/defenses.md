@@ -7,7 +7,7 @@ Each defense tries to reject, narrow, or qualify a claim before it becomes actio
 ```md
 ## D-001 for C-001 / H-001
 
-Decision: survives | narrowed | rejected | inconclusive
+Defense result: survives | narrowed | defeated | inconclusive
 
 Checked:
 - source context:

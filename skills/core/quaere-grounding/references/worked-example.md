@@ -3,7 +3,7 @@
 A bad-output (trust the docs) vs good-output (anchor → version fit → probe → lateral → decision) example, applied to an `acme-ai-sdk` 1.x ↔ 2.x docs/types mismatch. See `../SKILL.md` for the procedure this example enacts.
 
 
-**Input** (from the `eval-fixtures/sdk-version-grounding/` fixture):
+**Input** (mirrors the repo's `eval-fixtures/sdk-version-grounding/` fixture, not shipped with the installed skill):
 
 - `package.json` declares `acme-ai-sdk@1.4.0`.
 - `package-lock.json` resolves `acme-ai-sdk` to 1.4.0.

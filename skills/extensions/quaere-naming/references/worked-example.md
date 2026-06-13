@@ -30,7 +30,7 @@ Distilled from the upstream naming skill's `evaluation.md` and `case-studies.md`
 | **Context** | Searchability | Googleable? Wikipedia/major-brand competition? | 2× |
 | **Context** | Competitive density | Adjacent-space usage (5=none … 1=crowded) | 1× |
 
-**Total out of 110.** Reading: **>75 strong, >85 exceptional**; the final checklist requires **scored above 70** to commit. Tiebreakers within 5 pts: stronger metaphor → cleaner phone test → better origin story → better availability → instinct.
+**Total out of 105** (weights sum to 21 × max score 5). Reading: **>75 strong, >85 exceptional**; the final checklist requires **scored above 70** to commit. Tiebreakers within 5 pts: stronger metaphor → cleaner phone test → better origin story → better availability → instinct.
 
 ## Contextual sentence test
 

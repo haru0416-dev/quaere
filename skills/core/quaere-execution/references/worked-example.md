@@ -3,7 +3,7 @@
 A bad-output (edit-first) vs good-output (Contract → Plan → Do → Study → Act) example for the authorized-implementation-loop fixture. See `../SKILL.md` for the procedure this example enacts.
 
 
-**Input** (from `eval-fixtures/authorized-implementation-loop/`):
+**Input** (mirrors the repo's `eval-fixtures/authorized-implementation-loop/` fixture, not shipped with the installed skill):
 
 - `PLAN.md` — two TODOs: (1) make `calculate_total(items)` apply each `item["quantity"]`; (2) keep empty carts returning `0` and run the full suite. Commit only after checks pass. Do not push.
 - `src/cart.py` — current `calculate_total` sums prices but ignores `quantity`.
@@ -41,4 +41,7 @@ Study
 Commit
 - abc1234 Apply quantity in calculate_total per PLAN.md TODOs
 - Push: not performed (not authorized).
+
+Open items
+- none
 ```

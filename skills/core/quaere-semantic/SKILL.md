@@ -53,7 +53,7 @@ Collapse pure local helpers into their caller unless they carry a separate invar
 
 ### Step 0 — Module hypothesis (pre-pass)
 
-Before reading any unit, state a 2–3 sentence hypothesis: what problem the module solves, its central abstraction, what caller it expects. The unit fields confirm or refute it. At the end, record the verdict — **confirmed** / **refined** (a sub-claim was imprecise; name which units) / **refuted** (units reveal a different purpose; restate it as the units actually showed, and flag earlier fields filled under the wrong frame for re-reading). Refutation is a signal, not a failure.
+Before reading any unit, state a 2–3 sentence hypothesis: what problem the module solves, its central abstraction, what caller it expects. The unit fields confirm or refute it. At the end, record the verdict — **held** / **refined** (a sub-claim was imprecise; name which units) / **refuted** (units reveal a different purpose; restate it as the units actually showed, and flag earlier fields filled under the wrong frame for re-reading). The verdict is a self-consistency check, so it is `held`, never `confirmed` — that word is reserved for probe-gated claims. Refutation is a signal, not a failure.
 
 ### Step 1 — Per-unit fields
 
@@ -88,7 +88,7 @@ Per unit:
 
 Group units by module / layer / concern. End the review with:
 
-- **Module hypothesis verdict** — confirmed / refined / refuted, with which units forced the change.
+- **Module hypothesis verdict** — held / refined / refuted, with which units forced the change.
 - **Open questions** — every `UNKNOWN — probe: …` still needing the user or further probing.
 - **Risk hotspots** — units whose invariants are subtle, fragile, undocumented, or rely on caller discipline.
 - **Implementation implications** — only if the user asked for next steps; otherwise stop at understanding.
@@ -114,7 +114,7 @@ The recurring shapes that look like analysis but are paraphrase — and why each
 
 ## Handoff triggers
 
-Semantic review ends at understanding. If the next step needs a different discipline, hand off rather than continuing to read. Emit a short block naming: confirmed inputs (fields safe as facts), inconclusive inputs (every `plausible`/`UNKNOWN`), the next skill, and its stop condition.
+Semantic review ends at understanding. If the next step needs a different discipline, hand off rather than continuing to read. Emit a short block naming: confirmed inputs (only fields backed by a corroborator that was actually consulted), inconclusive inputs (every `plausible`/`UNKNOWN`, plus Invariants/Failure on state-mutating or trust-boundary units without a named corroborator), the next skill, and its stop condition.
 
 - Implementation is authorized → `quaere-execution` (carry units, invariants to preserve, risk hotspots).
 - An external library/SDK/API/CLI behavior the analysis depended on may have changed → `quaere-grounding`.
@@ -130,8 +130,8 @@ When switching, emit the standard block so the receiving skill knows what it is 
 ```
 Handoff
 - From skill: quaere-semantic
-- Confirmed inputs: <What/Why/Invariants/Failure/Connections fields safe as facts>
-- Inconclusive inputs: <every Why marked plausible or UNKNOWN>
+- Confirmed inputs: <only fields whose corroborator was actually consulted (the `confident` rule) — safe as facts>
+- Inconclusive inputs: <every plausible / UNKNOWN Why, plus Invariants/Failure on state-mutating or trust-boundary units without a named corroborator>
 - Required next skill: <quaere-grounding | quaere-evidence | quaere-execution | quaere-audit (if installed)>
 - Stop condition: <what the next skill must return before implementation or audit>
 ```
@@ -140,7 +140,7 @@ Handoff
 
 The skill is complete when:
 
-- A module hypothesis was stated before unit analysis, and its verdict (confirmed / refined / refuted) is at the end.
+- A module hypothesis was stated before unit analysis, and its verdict (held / refined / refuted) is at the end.
 - Every meaningful unit has all fields filled, the two `What` lines collapsed *only* after the operational test, or is explicitly `skipped: <reason>`.
 - Every `Why` carries a certainty marker, and every `confident` on a state-mutating or trust-boundary unit names the corroborator that was actually consulted (test / caller / blame / spec / ADR).
 - Open questions and risk hotspots are listed.
