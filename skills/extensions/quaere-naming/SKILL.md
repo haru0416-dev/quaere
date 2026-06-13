@@ -1,6 +1,6 @@
 ---
 name: quaere-naming
-description: This skill should be used whenever the user needs to name a product, SaaS tool, brand, library, open source project, CLI, bot, or app, or asks to rename something, find a brand name, pick a product name, or escape generic AI-slop names. It enforces a metaphor-driven process that establishes a naming brief before generating anything, explores conceptual territories instead of thesaurus synonyms, filters anti-patterns, verifies availability with real tool checks instead of guessing from memory, and presents only vetted finalists that each carry a metaphor origin story. Trigger when the user says name this, what should we call it, we need a brand name, give me naming ideas, or the current names sound generic. Do not use for naming code symbols, variables, or functions inside an existing codebase.
+description: This skill should be used whenever the user needs to name a product, SaaS tool, brand, library, open source project, CLI, bot, or app, or asks to rename or rebrand a product or project, find a brand name, pick a product name, or escape generic AI-slop names. It enforces a metaphor-driven process that establishes a naming brief before generating anything, explores conceptual territories instead of thesaurus synonyms, filters anti-patterns, verifies availability with real tool checks instead of guessing from memory, and presents only vetted finalists that each carry a metaphor origin story. Trigger when the user says name this, what should we call it, we need a brand name, give me naming ideas, or the current names sound generic. Do not use for renaming code symbols, variables, functions, files, or branches inside an existing codebase.
 compatibility: Designed for Claude Code, Codex, Opencode, and Agent Skills-compatible coding agents with file, search, web, and shell access.
 license: MIT
 ---
@@ -24,8 +24,8 @@ This is not a branding ritual. Asked to name something, a model regresses toward
 ## When NOT to use
 
 - Naming code symbols, variables, functions, or files inside a codebase — use `quaere-semantic` / `quaere-execution`, not brand naming.
-- The name is already chosen and only needs an availability check — run the availability gate (Step 4) directly and skip metaphor exploration.
-- Pure factual lookup of whether one specific name is taken — use `quaere-grounding`.
+- The name is already chosen and only needs a multi-platform availability sweep — run the availability gate (Step 4) directly and skip metaphor exploration.
+- A single authoritative claim about one name (one registry, trademark status) — use `quaere-grounding`.
 
 ## Handoff triggers (which skill comes after this one)
 
@@ -36,7 +36,7 @@ Naming ends at vetted finalists with origin stories and availability status, not
 - A naming claim ("X is taken", "Y is a competitor") is disputed and needs proof → `quaere-evidence`.
 - No name survives the gate → stop and report the territories explored and why they failed; do not present slop.
 
-The standard handoff payload (Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition) is at the end of this file under "Handoff to other skills".
+The standard handoff payload (Blocking question / Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition) is at the end of this file under "Handoff to other skills".
 
 ## Core procedure
 
@@ -53,7 +53,7 @@ Before generating ANY name, establish context. Ask:
 5. Any off-limits words, concepts, or styles?
 6. Which platforms must the name work on? (domain, npm, PyPI, GitHub, app store, social) — this answer decides which availability checks are mandatory in Step 4.
 
-A brief prevents wasted exploration. Do not generate before you have it.
+A brief prevents wasted exploration. Do not generate before you have it. When the request already answers brief questions, fill the brief from context, state the assumptions explicitly in the Naming brief output block, and proceed; ask only for missing answers that would change territory or platform choices (the same autonomy rule as Step 2).
 
 ### 2. Metaphor territories (not thesaurus)
 
@@ -71,11 +71,14 @@ Do NOT present any name that has not passed this. Memory and guesses are not evi
 2. **Platform checks** for survivors, scoped to the brief's Step-1 answer. Use the bundled script:
 
    ```bash
-   bash ${CLAUDE_SKILL_DIR}/scripts/check-availability.sh [name] domain npm pypi github telegram
+   bash <skill-dir>/scripts/check-availability.sh [name] domain npm pypi github telegram
    ```
+
+   (`<skill-dir>` = the directory containing this SKILL.md.)
 
    It batch-checks domain (whois for .com/.dev/.io), npm, PyPI, GitHub org, crates.io, RubyGems, WP plugin, and Telegram. Run survivors in parallel Bash calls. For app stores and social handles, use WebSearch. Full command table, dictionary-word shortcut, and decision framework: `references/availability.md`.
 3. **Decision:** drop names failing critical (must-have) platforms or with a direct competitor; flag-but-keep a strong name needing a workaround (exact `.com` taken but `get[name].com` free). If fewer than 3 survive, return to Step 3 — do not lower the bar.
+4. **Blocked checks:** if a check cannot execute (no network, blocked DNS, sandbox), never guess and never mark the platform `free`. When the brief's critical platforms were checked and only secondary ones are blocked, present finalists with the blocked platforms marked `unverified (check blocked)` and hand those platforms to `quaere-grounding` for confirmation. When every critical platform from the brief is blocked — or no check could run at all — present NO finalists and make no recommendation: emit the Handoff block with a concrete verification probe instead.
 
 ### 5. Present and decide (first user-facing output)
 
@@ -99,7 +102,7 @@ Finalists (3-5, all availability-checked)
 - N-001: <name>
   Origin: <15-sec story — the metaphor it compresses>
   Why it works: <principles satisfied>
-  Availability: <platform: free | taken | workaround>  (tool-verified)
+  Availability: <platform: free | taken | workaround | unverified (check blocked)>  (tool-verified; blocked platforms named, never guessed)
   Risks: <trade-offs>
 - N-002: ...
 

@@ -1,6 +1,6 @@
 ---
 name: quaere-invention
-description: This skill should be used whenever the user asks for a non-obvious approach, an alternative architecture, a research direction, a product or monetization idea, an agent-skill design, or any "not just the obvious solution" / "発想を広げたい" / "普通じゃない解法" request where the agent is likely to converge on the first average answer. It forces the agent to name the default basin it is escaping, break the assumptions that make that default feel inevitable through structured mutation passes, classify each candidate's novelty honestly, and design a kill-probe before promoting any idea — so divergence does not collapse into hype. Trigger when settling on the obvious solution too early would be the failure.
+description: This skill should be used whenever the user asks for a non-obvious approach, an alternative architecture, a research direction, a product or monetization idea, an agent-skill design, or any "not just the obvious solution" / "発想を広げたい" / "普通じゃない解法" / "brainstorm alternatives" / "アイデア出し" request where the agent is likely to converge on the first average answer. It forces the agent to name the default basin it is escaping, break the assumptions that make that default feel inevitable through structured mutation passes, classify each candidate's novelty honestly, and design a kill-probe before promoting any idea — so divergence does not collapse into hype. Trigger when settling on the obvious solution too early would be the failure.
 compatibility: Designed for Claude Code, Codex, Opencode, and Agent Skills-compatible coding agents with file, search, and git access.
 license: MIT
 ---
@@ -36,7 +36,7 @@ Invention ends at a small set of candidates with kill-probes, not at a built thi
 - A candidate is chosen and authorized to build → `quaere-execution`.
 - No candidate is testable yet → stop and report the option space and what evidence would unlock a decision; do not build.
 
-The standard handoff payload (Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition) is documented at the end of this file under "Handoff to other skills".
+The standard handoff payload (Blocking question / Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition) is documented at the end of this file under "Handoff to other skills".
 
 ## Core procedure
 
@@ -92,7 +92,7 @@ Classify every candidate. The label is a finding, not a compliment. Do not overs
 
 - `known pattern` — already a named, common solution.
 - `recombination` — a new mix of known parts.
-- `locally novel` — likely new for this context, not in general. Permitted only if the candidate carries a falsifiable kill-probe (step 6) whose kill signal could actually occur; the label is earned by a disconfirming probe, not by self-assessment. Without one, downgrade to `genuinely uncertain`.
+- `locally novel` — likely new for this context, not in general. Permitted only if the candidate carries a falsifiable kill-probe (step 6) whose kill signal could actually occur; the label is earned by *designing* a probe that could disconfirm it — never by self-assessment. The probe itself runs downstream in `quaere-evidence`, so until it has run, emit the label as `locally novel (unprobed)`. Without a kill-probe at all, downgrade to `genuinely uncertain`.
 - `genuinely uncertain` — cannot tell if it exists; needs grounding.
 - `incoherent` — does not actually hold together; drop it.
 
@@ -119,21 +119,19 @@ Invention probe
 - Assumptions: A1..An with kinds
 
 Candidates
-- C-001: <one line>
+- K-001: <one line>
   Broken assumption: <A-id>
   Mechanism: <operator + how>
   Expected gain: <...>
   Failure mode: <...>
-  Novelty: known pattern | recombination | locally novel | genuinely uncertain | incoherent
-- C-002: ...
+  Novelty: known pattern | recombination | locally novel (unprobed) | genuinely uncertain | incoherent
+- K-002: ...
 
 Probes (top 1-3)
-- P-001 for C-00x: Probe / Success / Kill / Cost / Decision-changing evidence
+- P-001 for K-00x: Probe / Success / Kill / Cost / Decision-changing evidence
 
 Handoff
-- Surviving candidates: <ids>
-- Required next skill: <quaere-grounding | quaere-evidence | quaere-execution | none yet>
-- Stop condition: <what the next skill must return>
+- <emit the standard 6-field block from "## Handoff to other skills": From skill / Blocking question / Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition>
 ```
 
 ## Common drift modes and anti-patterns
@@ -170,7 +168,7 @@ The skill is complete when:
 
 - The default basin is named (step 1).
 - At least four mutation passes produced candidates, each naming broken assumption / mechanism / gain / failure mode.
-- Every candidate carries a novelty label from the fixed five, with no self-rated "truly novel" language; any candidate labeled `locally novel` carries its own falsifiable kill-probe rather than a self-rating.
+- Every candidate carries a novelty label from the fixed five, with no self-rated "truly novel" language; any candidate labeled `locally novel` carries its own falsifiable kill-probe rather than a self-rating, and stays marked `(unprobed)` until that probe has run downstream.
 - The top 1–3 candidates each have a kill-probe.
 - A handoff or an explicit "not testable yet" stop is stated.
 

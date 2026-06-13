@@ -34,4 +34,8 @@ Handoff
 - Confirmed facts:
 - Conflicted or inconclusive facts:
 - URLs / local paths:
+- Required next skill:
+- Stop condition:
 ```
+
+When the handoff crosses to another skill, also emit the full inter-skill payload block (From skill / Blocking question / Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition) from `../SKILL.md`'s "Handoff to other skills" section.

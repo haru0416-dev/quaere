@@ -16,7 +16,7 @@ subset of a per-target ledger. See `../SKILL.md` for the workflow these files re
       handoff.md
 ```
 
-Use the templates in `templates/`. Do not create all seven by default;
+Use the templates in `../templates/`. Do not create all seven by default;
 `findings.md`, `probes.md`, and `handoff.md` are often enough. If the user does not
 want files written, keep the same structure in the response.
 

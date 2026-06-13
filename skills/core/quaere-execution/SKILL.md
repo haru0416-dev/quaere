@@ -1,6 +1,6 @@
 ---
 name: quaere-execution
-description: "This skill should be used whenever the user authorizes multi-step coding implementation: applying a plan, finishing a feature, implementing review feedback, writing tests, making a refactor, or turning a specification into working code. It enforces a Plan → Do → Study → Act implementation loop with scoped units, fresh verification evidence, diff review, fix loops, and commit/push discipline so the agent does not blind-patch, batch unrelated changes, claim success without tests, or commit unless explicitly authorized. Do not use for trivial one-line edits, command-only requests, or pure explanations."
+description: "This skill should be used whenever the user authorizes multi-step coding implementation: applying a plan, finishing a feature, implementing review feedback, writing tests, making a refactor, fixing a bug whose cause is already confirmed, or turning a specification into working code. It enforces a Plan → Do → Study → Act implementation loop with scoped units, fresh verification evidence, diff review, fix loops, and commit/push discipline so the agent does not blind-patch, batch unrelated changes, claim success without tests, or commit unless explicitly authorized. Do not use for trivial one-line edits, command-only requests, or pure explanations."
 compatibility: Designed for Claude Code, Codex, Opencode, and Agent Skills-compatible coding agents with file, shell, test, and git access.
 license: MIT
 ---
@@ -35,7 +35,7 @@ Stop and hand off when the blocker is no longer implementation:
 - Existing module intent or invariants are unclear → `quaere-semantic`.
 - Security properties or auth / tenancy / parser / concurrency / crypto / payment / sandbox risks come up → stop before patching beyond a confirmed fix. If the `quaere-audit` extension is installed, hand off to it; otherwise flag the security risk and escalate to the user.
 
-The standard handoff payload (Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition) is documented at the end of this file under "Handoff to other skills".
+The standard handoff payload (Blocking question / Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition) is documented at the end of this file under "Handoff to other skills".
 
 ## Core model
 
@@ -60,6 +60,8 @@ Choose the lightest loop that protects correctness:
 - **Persistent execution log (large/risky/batched; 2h+)** — many units, migrations, generated files, or likely handoff. Keep durable notes of units, checks, review findings, and open items.
 
 Do not let the checklist become the work. Scale output down for small tasks, but never skip: contract → scoped plan → edit → study diff/checks → act.
+
+A full end-to-end example is in [`references/worked-example.md`](references/worked-example.md); drift rationalizations and their actual failures are in [`references/anti-patterns.md`](references/anti-patterns.md).
 
 ## Preconditions
 
@@ -185,7 +187,7 @@ Before committing:
 - avoid secrets, local state, generated noise, and unrelated files
 - use a message that explains the purpose of the change
 
-**Pre-commit hooks.** When a pre-commit hook fails, the commit *did not happen*. Running `git --amend` at this point would modify the *previous* (unrelated) commit, not the failed-and-not-created one. The correct response is: read the hook's output, fix the underlying issue, re-stage the fix, and create a *new* commit. When a hook *modifies* files (formatter, linter autofix), the modifications are unstaged after the failed commit; review them, stage them if appropriate, and create the new commit. Do not amend, force-push, skip hooks (`--no-verify`), or rewrite history unless explicitly requested and safe.
+**Pre-commit hooks.** When a pre-commit hook fails, the commit *did not happen*. Running `git commit --amend` at this point would modify the *previous* (unrelated) commit, not the failed-and-not-created one. The correct response is: read the hook's output, fix the underlying issue, re-stage the fix, and create a *new* commit. When a hook *modifies* files (formatter, linter autofix), the modifications are unstaged after the failed commit; review them, stage them if appropriate, and create the new commit. Do not amend, force-push, skip hooks (`--no-verify`), or rewrite history unless explicitly requested and safe.
 
 ### 8. Handoff
 

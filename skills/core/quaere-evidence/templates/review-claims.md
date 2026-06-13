@@ -8,31 +8,27 @@ Use for PR review, risky diffs, security concerns, or specification mismatch can
 ## C-001: <short title>
 
 Severity: critical | warning | suggestion
-Confidence: high | medium | low
-Status: proposed | defended | confirmed | rejected | fixed | deferred
+Status: proposed | defended | confirmed | confirmed (rebuttal-substituted) | rejected | inconclusive | fixed | deferred
 
-Claim:
+# Analytical phase — the claim and its evidential support
+Claim: <the actionable concern>
+Data/Evidence: <file:line, diff, log, repro, spec, or trace>
+Warrant: <why the evidence implies the risk>
+Backing: <spec | invariant | test | policy | contract | RFC | ADR> — <reference>
+
+# Falsifiability phase — how the claim could be defeated
+Qualifier: high | medium | low confidence, with why
+Rebuttal / false-positive reason: <what could defeat the claim>
+Suggested probe: <supporting check whose expected result would corroborate the claim>
+Falsifier: <observation that would defeat the claim>
+Disconfirming probe: <check whose unexpected result would defeat the claim>
 
 Affected files/symbols:
 
-Data / evidence:
-
-Warrant (why the evidence implies the risk):
-
-Backing (spec / invariant / test / contract):
-
-Qualifier (confidence and why): high | medium | low
-
-Rebuttal / possible false-positive reason:
-
-What would falsify or narrow this claim:
-
 Why this matters:
-
-Suggested probes:
-- supporting:
-- disconfirming:
 ```
+
+The ten labeled lines above (C-001 through Disconfirming probe) are the mandatory contract from `../SKILL.md` — keep their labels and order exactly; `Affected files/symbols` and `Why this matters` are optional extras.
 
 ## Claims
 

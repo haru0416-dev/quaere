@@ -10,9 +10,9 @@ Even with this skill loaded, agents drift in recognizable ways. The first column
 | "The code is short and obvious, no semantic work needed." | Trivial-looking accessors and pure-looking functions carry the subtlest invariants (hidden caller discipline, accidental global reads). Run the operational test before declaring obvious. |
 | "Why is unclear, but it's probably backward-compatibility." | The agent filled `Why` with a guess. Backward-compatibility is the most common fabrication. Mark `UNKNOWN — probe: git blame` and continue. |
 | "Connections: used elsewhere." | The slice analysis was skipped. Both backward (←) and forward (→) slices must name concrete callers, state references, or environment dependencies. |
-| "Invariants: types enforce this." | Some invariants are types; many are not (caller discipline, ordering, freshness, lock state, transaction boundary). Enumerate the non-type invariants explicitly or write `none beyond types — verified by: <test or argument>`. |
+| "Invariants: types enforce this." | Some invariants are types; many are not (caller discipline, ordering, freshness, lock state, transaction boundary). Enumerate the non-type invariants explicitly, or write `none beyond types` only after checking against a test or argument. |
 | "What and Why are the same idea expressed differently." | If both fields can be filled with the same sentence, the analysis is paraphrase. `What` is mechanical or domain behavior; `Why` is the constraint that justifies the chosen behavior. They cannot be substituted. |
-| "I covered the major units; minor ones are not interesting." | Skipped units carry implicit contracts. Either cover them or write `skipped because: <reason>`. The unmarked skip is the drift. |
+| "I covered the major units; minor ones are not interesting." | Skipped units carry implicit contracts. Either cover them or write `skipped: <reason>`. The unmarked skip is the drift. |
 | "Operational test passed because nothing seems to break." | The test is *whether the rewrite would change the analysis*, not whether the rewrite would compile. If the analysis is so vague that no rewrite could perturb it, the analysis is too shallow. |
 
 ## Anti-patterns (each item explains why it fails)
@@ -25,5 +25,15 @@ Even with this skill loaded, agents drift in recognizable ways. The first column
 
 - **Producing analysis and editing immediately.** This skill ends at understanding; implementation is a separate step the user must authorize. Editing during the review fails on two grounds. *Comprehension*: the analysis is no longer a frozen artifact, so a question raised by the edit ("does this still preserve the lock-state invariant we just identified?") cannot consult a stable reference — the agent ends up re-paraphrasing instead of consulting. *Workflow*: it merges two authorization scopes (review vs change), and any drift in the diff cannot be traced to a recorded invariant. Hand off to `quaere-execution` instead.
 
-- **Compressing output to seem efficient.** The user accepted the cost when invoking this skill (see *Industry baseline* — full comprehension is the deliberate exception). Compression fails because the deliverable *is* the analysis; a terser review is just paraphrase wearing different formatting.
+- **Compressing output to seem efficient.** The user accepted the comprehension cost by invoking this skill — full comprehension is the deliberate exception to everyday skimming. Compression fails because the deliverable *is* the analysis; a terser review is just paraphrase wearing different formatting.
+
+## Deeper question templates (protocol/state, lifetime, ownership, reachability)
+
+When the reason for code's shape is still unclear after tests, callers, and `git blame`, work these templates *(Sillito, Murphy & De Volder 2008; LaToza & Myers 2010 — empirically the hardest developer questions are about intent and reachability)*:
+
+- What protocol does this object follow? What states can it be in?
+- What is the lifetime of this state? Who creates it, who destroys it?
+- Who owns this object's mutation? Single writer, multiple writers, none after construction?
+- What invariants does the *caller* assume vs what the *callee* enforces?
+- What is the reachability — who can reach this code and under what conditions?
 

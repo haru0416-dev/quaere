@@ -8,7 +8,12 @@ set -euo pipefail
 
 NAME="${1:?Usage: check-availability.sh <name> [platforms...]}"
 shift
-PLATFORMS=("${@:-domain github npm}")
+if [ $# -eq 0 ]; then
+  PLATFORMS=(domain github npm)
+else
+  PLATFORMS=("$@")
+fi
+UNKNOWN_PLATFORM=0
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -101,9 +106,14 @@ for platform in "${PLATFORMS[@]}"; do
       ;;
     *)
       echo "  Unknown platform: $platform (valid: domain, npm, pypi, github, crates, rubygems, wp, telegram)"
+      UNKNOWN_PLATFORM=1
       ;;
   esac
 done
 
 echo "---"
 echo "Note: automated checks can give false positives. Always verify manually before committing."
+
+if [ "$UNKNOWN_PLATFORM" -ne 0 ]; then
+  exit 1
+fi

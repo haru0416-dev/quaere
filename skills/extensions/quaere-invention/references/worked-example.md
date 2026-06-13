@@ -32,33 +32,38 @@ they finish setup. Suggest a non-obvious approach."
 
 ## 4. Mutation passes (four operators, different assumptions)
 
-- C-001 — **Subtraction** on A2: remove the onboarding phase; ship a zero-config
+- K-001 — **Subtraction** on A2: remove the onboarding phase; ship a zero-config
   hosted sandbox that already works, and let setup happen *after* the user has felt
   value. Broken assumption: A2. Mechanism: delete the "complete before value" gate.
   Expected gain: value precedes effort, so effort feels worth it. Failure mode:
   sandbox diverges from real local behavior.
-- C-002 — **Transfer** on A3 (from CI/CD): treat setup as a generated artifact —
+- K-002 — **Transfer** on A3 (from CI/CD): treat setup as a generated artifact —
   detect the user's stack and emit a ready-made config + key-injection script, like a
   scaffolding tool. Broken assumption: A3. Mechanism: import codegen from
   project-bootstrap tooling. Expected gain: the user runs one command instead of
   following ten steps. Failure mode: stack detection is wrong on unusual setups.
-- C-003 — **Inversion** on A1: assume drop-off is *boredom*, not confusion; make
+- K-003 — **Inversion** on A1: assume drop-off is *boredom*, not confusion; make
   setup produce something immediately shareable (a live status badge / first trace)
   so finishing is rewarded, not just completed. Broken assumption: A1. Mechanism:
-  invert "reduce friction" into "add payoff." Failure mode: payoff feels gimmicky.
-- C-004 — **Temporal shift** on A4: redefine success as time-to-first-real-use, not
+  invert "reduce friction" into "add payoff." Expected gain: finishing carries an
+  immediate, visible payoff, so completion becomes self-rewarding. Failure mode:
+  payoff feels gimmicky.
+- K-004 — **Temporal shift** on A4: redefine success as time-to-first-real-use, not
   setup completion; let users do real work with a temporary key and reconcile full
   setup in the background. Broken assumption: A4. Mechanism: move setup after first
-  use. Failure mode: temporary-key sprawl / security review needed.
+  use. Expected gain: users reach real value without blocking on full setup, so
+  completion pressure disappears. Failure mode: temporary-key sprawl / security
+  review needed.
 
 ## 5. Novelty filter
 
-- C-001 zero-config sandbox: `recombination` (common in SaaS, less so for local dev
+- K-001 zero-config sandbox: `recombination` (common in SaaS, less so for local dev
   tools).
-- C-002 generated config: `recombination` (scaffolding is known; applying it to
+- K-002 generated config: `recombination` (scaffolding is known; applying it to
   onboarding is the twist).
-- C-003 shareable-payoff setup: `locally novel` for this category.
-- C-004 success = time-to-first-use: `genuinely uncertain` — depends on whether a
+- K-003 shareable-payoff setup: `locally novel (unprobed)` for this category — its
+  kill-probe (P-002) is designed below but has not run yet.
+- K-004 success = time-to-first-use: `genuinely uncertain` — depends on whether a
   temporary-key flow is even allowed by the security model.
 
 No candidate is self-rated as broadly original; a general-novelty claim would need a
@@ -66,22 +71,25 @@ prior-art search via `quaere-grounding`.
 
 ## 6. Probe design (top candidates)
 
-- P-001 for C-001: ship the hosted sandbox to 5% of new users; **kill signal** =
-  completion of *real* local setup does not rise vs control (sandbox just delays the
-  same drop-off). Cost: one sandbox env. Decision-changing evidence: local-setup
+- P-001 for K-001: ship the hosted sandbox to 5% of new users; **success signal** =
+  real local-setup completion rises vs control; **kill signal** = completion of
+  *real* local setup does not rise vs control (sandbox just delays the same
+  drop-off). Cost: one sandbox env. Decision-changing evidence: local-setup
   completion rate at 7 days.
-- P-002 for C-003: add a shareable first-trace to the existing wizard for a cohort;
-  **kill signal** = no change in completion, or shares but still no setup finish.
-  Cost: one feature flag.
+- P-002 for K-003: add a shareable first-trace to the existing wizard for a cohort;
+  **success signal** = setup completion rises in the badge cohort; **kill signal** =
+  no change in completion, or shares but still no setup finish. Cost: one feature
+  flag. Decision-changing evidence: completion delta between badge cohort and
+  control.
 
 ## 7. Handoff
 
 ```
 Handoff
 - From skill: quaere-invention
-- Blocking question: which candidate actually moves local-setup completion, and is C-004's temporary-key flow allowed?
-- Confirmed inputs: C-001 and C-003 have kill-probes and fit the hard constraints — ready to test.
-- Inconclusive inputs: C-004 (genuinely uncertain — security model unknown); C-002 (recombination, untested).
-- Required next skill: quaere-evidence (run P-001 / P-002 as disconfirming probes); quaere-grounding for C-004's temporary-key security question.
+- Blocking question: which candidate actually moves local-setup completion, and is K-004's temporary-key flow allowed?
+- Confirmed inputs: K-001 and K-003 have kill-probes and fit the hard constraints — ready to test.
+- Inconclusive inputs: K-004 (genuinely uncertain — security model unknown); K-002 (recombination, untested).
+- Required next skill: quaere-evidence (run P-001 / P-002 as disconfirming probes); quaere-grounding for K-004's temporary-key security question.
 - Stop condition: a candidate whose kill-probe ran and did not kill it, before any build.
 ```

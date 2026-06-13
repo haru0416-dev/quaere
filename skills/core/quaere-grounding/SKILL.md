@@ -1,6 +1,6 @@
 ---
 name: quaere-grounding
-description: "This skill should be used whenever implementation or review depends on external, version-sensitive facts: libraries, SDKs, APIs, CLIs, cloud services, security advisories, changelogs, release notes, or documentation that may have changed. The skill anchors local versions, ranks source quality, runs an executable probe and a lateral corroborator before promoting any claim to `confirmed`, and turns confirmed facts into implementation constraints. Trigger when the task depends on any external surface whose freshness binds correctness — model memory is not evidence."
+description: "This skill should be used whenever implementation or review depends on external, version-sensitive facts: libraries, SDKs, APIs, CLIs, cloud services, security advisories, changelogs, release notes, or documentation that may have changed. The skill anchors local versions, ranks source quality, runs an executable probe and a lateral corroborator before promoting any claim to `confirmed`, and turns confirmed facts into implementation constraints. Trigger when the task depends on any external surface whose freshness binds correctness — model memory is not evidence. Also trigger when the user names a model, package, API, or version identifier the agent does not recognize: unfamiliar names likely post-date training and must be verified, not corrected."
 compatibility: "Designed for Claude Code, Codex, Opencode, and Agent Skills-compatible coding agents with file, search, shell, web, and git access. If web access is unavailable, use local package source/types, lockfiles, vendored docs (with mtime check), CLI help/version output, and mark external facts inconclusive when the dual-axis gate cannot be satisfied."
 license: MIT
 ---
@@ -11,7 +11,7 @@ license: MIT
 
 **No claim becomes `confirmed` without (a) an executable probe AND (b) a lateral corroborator. Otherwise the claim stays `inconclusive`.**
 
-This is not a stylistic rule. Model memory is not evidence for version-sensitive external facts: SOTA LLMs reach only 48–51% on version-conditioned generation, and even retrieval-augmented setups follow internal priors when retrieved docs disagree with parametric memory *(GitChameleon 2.0 — Misra et al. 2025; VersiCode — Wu et al. 2024; RustEvo² — Liang et al. 2025)*. Authority alone is also insufficient: lateral-reading research shows that single-source acceptance — even of high-authority sources — is the dominant failure mode of internet-era literacy *(Wineburg & McGrew 2017, Stanford History Education Group; Caulfield 2019, SIFT)*. The two-axis structure (source axis from the ranking, claim-credibility axis from probe + lateral check) follows the NATO Admiralty Code (STANAG 2511, source reliability A–F × information credibility 1–6); Anthropic's Citations API is a contemporary engineering instance of the same separation, evaluating output on factual accuracy and source-supports-claim as independent axes.
+This is not a stylistic rule. Model memory hits only 48–51% on version-conditioned generation and follows internal priors even after retrieval, and single-source acceptance — even of high-authority sources — is the dominant documented failure mode; the gate therefore needs both axes (source quality AND probe + lateral corroboration). The evidence base and the two-axis lineage are in [`references/source-quality.md`](references/source-quality.md).
 
 
 ## Boundary with quaere-evidence
@@ -22,7 +22,7 @@ This is not a stylistic rule. Model memory is not evidence for version-sensitive
 
 The handoff from this skill should be a set of external constraints. The handoff from `quaere-evidence` should be a decision about claims, causes, or fixes.
 
-As of 2026-05, Anthropic's official documentation does not provide guidance for resolving "docs say X / installed types say Y" conflicts. The closest precedent is the `claude-api` skill's "add alongside, don't replace" rule for version-tied state, which this skill extends.
+At the time of writing (2026-05), Anthropic's official documentation did not provide guidance for resolving "docs say X / installed types say Y" conflicts. The closest precedent is the `claude-api` skill's "add alongside, don't replace" rule for version-tied state, which this skill extends.
 
 ## When to use
 
@@ -79,7 +79,7 @@ Version Fit        whether the claim applies to the local anchor
 Conflict Check     docs vs local types/source/runtime/issues/advisories
 Executable Probe   mandatory before `confirmed` on version-sensitive claims
 Lateral Check      independent corroborator — single-source claims do not pass
-Decision           confirmed / locally observed / version-mismatched / stale / conflicted / inconclusive
+Decision           confirmed / locally observed / documented / version-mismatched / stale / conflicted / local-only / inconclusive
 Handoff            implementation constraints, source URLs or local paths, and remaining uncertainty
 ```
 
@@ -99,6 +99,10 @@ Use the lightest version of this model that still satisfies the dual-axis gate.
 **`locally observed`** is a distinct intermediate label. It means the behavior was verified in the local environment but has not been corroborated by an independent external source. Use it when an executable probe succeeded but the claim depends on a broader external fact (API contract, package behavior across versions) that a single local run cannot fully cover. Do not promote to `confirmed` without a lateral corroborator.
 
 Note: multiple sources that derive from the same resolution (e.g., `package.json`, lockfile, and installed types all reflect the same dependency graph) are not independent corroborators. Independence requires a structurally separate source — changelog, official docs, a different probe mechanism, or a commit-level reference.
+
+**Deliverable shape:** the report template — including the labeled `No-network fallback strategy:` block — is at [`references/output-format.md`](references/output-format.md).
+
+**No-network fallback (compact; full procedure in Workflow step 10):** when web access fails, apply in order: (1) dated cached/vendored content, stating the cache date; (2) tell the user the data may be stale; (3) name the canonical URLs to fetch and report back. If none resolves the fact, mark `inconclusive` — never substitute model memory — and emit the labeled `No-network fallback strategy:` block in the report.
 
 ## Workflow
 
@@ -169,13 +173,13 @@ For each claim, compare the source against the local anchor:
 - Do security advisories list this project as affected or unaffected?
 - Do examples declare a compatible version, or are they just current snippets?
 
-**Anthropic precedent for version-tied state.** The `claude-api` skill encodes per-version migration rules (4.5 → 4.6 → 4.7) with an explicit "add alongside, don't replace" rule when multiple versions coexist: do not remove a capability gate just because the new version exists; old traffic may still depend on the old shape. Apply the same conservatism here. When local anchor and target version diverge, the claim about the target does not transfer to local without explicit migration evidence.
+**Anthropic precedent for version-tied state.** The `claude-api` skill encodes per-version migration rules (e.g., 4.5 → 4.6) with an explicit "add alongside, don't replace" rule when multiple versions coexist: do not remove a capability gate just because the new version exists; old traffic may still depend on the old shape. Apply the same conservatism here. When local anchor and target version diverge, the claim about the target does not transfer to local without explicit migration evidence.
 
 Prefer stronger local evidence over remote `latest` docs when they disagree about what this project can compile or run.
 
 ### 7. Run executable probes — MANDATORY for `confirmed` on version-sensitive claims
 
-Empirical: SOTA LLMs follow internal priors even after retrieval (GitChameleon 2.0; VersiCode; RustEvo²). Retrieval enables the probe; the probe is what verifies. **For any claim in the categories listed above (SDK names, API shapes, CLI flags, advisory affected versions, etc.), an executable probe is required before the claim can reach `confirmed`.** Probes:
+Retrieval enables the probe; the probe is what verifies — retrieval alone leaves the parametric prior intact. **For any claim in the categories listed above (SDK names, API shapes, CLI flags, advisory affected versions, etc.), an executable probe is required before the claim can reach `confirmed`.** Probes:
 
 - inspect installed type definitions or generated clients
 - run `tsc --noEmit`, a tiny compile check, or a language-specific type check
@@ -192,7 +196,7 @@ If neither an executable probe nor two independent tier 1–6 sources are availa
 
 ### 8. Lateral cross-check — MANDATORY before `confirmed`
 
-A single-source claim is `single-source`, not `confirmed`. Find one independent corroborator before promoting:
+A single-source claim stays `inconclusive` (single-source), never `confirmed`. Find one independent corroborator before promoting:
 
 - a different official source for the same fact (e.g., changelog + API reference)
 - a maintainer-authored issue or PR that confirms the behavior
@@ -210,9 +214,11 @@ Apply both axes — source axis (Step 5) and claim-credibility axis (Steps 7 + 8
 - **stale** — the source predates a relevant release, migration, advisory, or deprecation, or lacks date/version information for a time-sensitive fact.
 - **conflicted** — credible sources disagree, or docs and local types/runtime disagree (Step 6 surfaced the disagreement).
 - **locally observed** — executable probe succeeded locally, but no independent lateral corroborator has been applied. The behavior was seen, not confirmed as an external fact. Usable as local evidence, not as a grounded external claim.
+- **documented** — official docs support it, but no executable probe has confirmed it locally. Not locally confirmed; not yet an implementation constraint.
+- **local-only** — no network was available; local source plus an executable probe support it, but the external claim could not be confirmed.
 - **inconclusive** — single-source (no lateral corroborator), no executable probe possible, or the needed fact could not be verified.
 
-Only `confirmed` claims become implementation constraints. `locally observed`, `version-mismatched`, `stale`, `conflicted`, and `inconclusive` claims must not be used as if true.
+Only `confirmed` claims become implementation constraints. `locally observed`, `documented`, `local-only`, `version-mismatched`, `stale`, `conflicted`, and `inconclusive` claims must not be used as if true.
 
 ### 10. No-network fallback strategy
 
@@ -230,7 +236,7 @@ A bad-output (trust the docs) vs good-output (anchor → version fit → probe �
 
 ## Common drift modes and anti-patterns
 
-The recurring shapes that produce `confirmed` labels without one of the two required axes ("docs say X — that's enough", "Single-axis acceptance", knowledge-cutoff "correction", treating retrieval as verification, etc.) are at [`references/anti-patterns.md`](references/anti-patterns.md). Read it before promoting a claim past `single-source` or `inconclusive`.
+The recurring shapes that produce `confirmed` labels without one of the two required axes ("docs say X — that's enough", "Single-axis acceptance", knowledge-cutoff "correction", treating retrieval as verification, etc.) are at [`references/anti-patterns.md`](references/anti-patterns.md). Read it before promoting a claim that is still single-source or `inconclusive`.
 
 ## Output format
 
@@ -245,7 +251,7 @@ Handoff
 - From skill: quaere-grounding
 - Blocking question: <what external fact could not be confirmed here>
 - Confirmed inputs: <claims reaching "confirmed" status — safe to use as implementation constraints>
-- Inconclusive inputs: <locally observed / inconclusive / version-mismatched / stale facts — not safe to use as true>
+- Inconclusive inputs: <locally observed / documented / local-only / version-mismatched / stale / conflicted / inconclusive facts — not safe to use as true>
 - Required next skill: <quaere-evidence | quaere-execution | quaere-semantic | (quaere-audit, if the extension is installed)>
 - Stop condition: <what the next skill must do with the confirmed / inconclusive facts>
 ```
@@ -265,7 +271,7 @@ This skill is complete when:
 - every external surface in scope has a local anchor or explicit missing-anchor note
 - every external claim has source quality (tier from `references/source-quality.md`), version fit, executable probe result (or explicit non-availability reason), lateral corroborator (or `inconclusive` flag), and a decision
 - only `confirmed` claims (passing both source axis and claim-credibility axis) are listed as implementation constraints
-- stale, version-mismatched, conflicted, single-source, and inconclusive facts are clearly separated from usable facts
+- locally observed, documented, local-only, version-mismatched, stale, conflicted, and inconclusive facts (including single-source claims) are clearly separated from usable facts
 - knowledge-cutoff bias is explicitly handled when the agent's prior disagrees with the user's reference
 
 Do not proceed as though a fact is current merely because it matches model memory. Do not proceed as though a single source has been verified merely because it is highly authoritative.

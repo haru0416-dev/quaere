@@ -1,6 +1,6 @@
 ---
 name: quaere-audit
-description: "This skill should be used whenever the user asks for a serious security audit, vulnerability review, bug bounty triage, threat-model-driven code review, protocol/spec conformance audit, auth/authz or tenant-isolation review, exploitability analysis, CVE/advisory impact assessment, or security-sensitive PR review. It coordinates a property-driven audit: scope and rules of engagement → security properties → attack surface → source/boundary/sink or guard mapping → proof attempt → false-positive gates → severity/confidence → safe repro/report, with companion handoffs for external facts, semantic invariants, evidence-gated claims, and authorized PoC/fix work."
+description: "This skill should be used whenever the user asks for a serious security audit, vulnerability review, bug bounty triage, threat-model-driven code review, protocol/spec conformance audit, auth/authz or tenant-isolation review, exploitability analysis, CVE/advisory impact assessment, or security-sensitive PR review when exploitability or a security property must be proven. It coordinates a property-driven audit: scope and rules of engagement → security properties → attack surface → source/boundary/sink or guard mapping → proof attempt → false-positive gates → severity/confidence → safe repro/report, with companion handoffs for external facts, semantic invariants, evidence-gated claims, and authorized PoC/fix work."
 compatibility: Designed for Codex, Claude Code, Opencode, and Agent Skills-compatible coding agents with file, search, shell, test, git, and optional web access.
 license: MIT
 ---
@@ -65,6 +65,8 @@ Security auditing is property-driven, not bug-class-driven. OWASP Top 10/CWE lab
 
 Do not expand scope just because the codebase is large. Start from assets, trust boundaries, and rules of engagement. Promote the tier when blast radius demands it; never lower the tier to make a finding easier to confirm.
 
+**Confirmation Rule (summary — full rule under `## Confirmation Rule` near the end):** Triage `confirmed` requires all 4: (1) explicit property and concrete proof gap naming the missing or failed guard, sink, or invariant; (2) code evidence that the gap is reachable from attacker-controlled input; (3) false-positive gates run, including at least one disconfirming probe that names what was actually consulted (file/symbol/caller/config/spec) or the command/test actually run — absent a named consulted artifact, cap the finding at `potential`; (4) safe repro/trace or strong reasoning for non-trivial impact, or a recorded safety reason. Standard adds (5) external facts grounded via `quaere-grounding` and (6) `quaere-evidence` failed to reject the finding; Deep adds (7) `quaere-semantic` mapped the critical path. Promote high-blast-radius Triage findings (consensus break, funds movement, auth bypass, parser RCE, sandbox escape, key compromise, mass/bulk tenant data exposure, cross-tenant write, tenant impersonation, multi-tenant secret leak) to Standard before `confirmed`.
+
 ## Safety boundaries
 
 Default to read-only analysis. Ask first before:
@@ -74,7 +76,7 @@ Default to read-only analysis. Ask first before:
 
 Prefer safe substitutes: local fixtures, sandboxed test environments, dry runs, synthetic inputs, symbolic traces, or code proofs. If a safe repro cannot be produced, record why and classify accordingly; do not run unsafe probes just to strengthen a report.
 
-**Stop now — hard stops (full list under "Stop conditions" at the end):** stay read-only and ask before any unsafe or production-touching probe; never run an unsafe probe just to strengthen a report; do not promote a finding to `confirmed` until it passes the false-positive gates; stop at the iteration budget and hand off rather than looping.
+**Stop now — hard stops (full list under "Stop conditions" at the end):** stay read-only and ask before any unsafe or production-touching probe; never run an unsafe probe just to strengthen a report; do not promote a finding to `confirmed` until it passes the false-positive gates; stop at the verification budget and hand off rather than looping.
 
 ## Workflow
 
@@ -219,7 +221,7 @@ Tier does not override external-fact freshness. Even in Triage, if a finding rel
 
 1. Explicit security property and concrete proof gap **naming the missing or failed guard, sink, or invariant** (matching the Iron Law's source → boundary → guard → impact chain).
 2. Code evidence that the gap is reachable from attacker-controlled input.
-3. False-positive gates run, including at least one disconfirming probe.
+3. False-positive gates run, including at least one disconfirming probe that names what was actually consulted (file/symbol/caller/middleware/config/spec) or the command/test actually run, recorded in the finding's `Disconfirming check performed:` field; absent a named consulted artifact, cap the finding at `potential`.
 4. Safe repro, trace, or strong reasoning showing non-trivial impact; or a safety reason repro is unavailable.
 
 **Standard adds 2 conditions (6 total):**
@@ -262,6 +264,6 @@ Handoff
 
 ## Stop conditions
 
-Stop when the requested scope is covered, the verification budget is exhausted, unsafe probing would be required, evidence remains insufficient after meaningful disconfirming probes, or the user must decide whether to expand scope, run a PoC, disclose, or fix.
+Stop when the requested scope is covered, the verification budget is exhausted (default: 5 investigation iterations / 5 planned probes, mirroring `quaere-evidence`, unless the user overrides), unsafe probing would be required, evidence remains insufficient after meaningful disconfirming probes, or the user must decide whether to expand scope, run a PoC, disclose, or fix.
 
 Do not silently continue into broad repository scanning after finishing the requested surface. End with uncovered risks and next probes.
