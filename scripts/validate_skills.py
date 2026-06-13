@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 import json
 from pathlib import Path
@@ -12,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS_DIR = ROOT / "skills"
 README = ROOT / "README.md"
+README_JA = ROOT / "README.ja.md"
 EXAMPLES = ROOT / "examples" / "README.md"
 SCENARIOS = ROOT / "evals" / "scenarios.json"
 MAX_SKILL_LINES = 500
@@ -39,6 +41,12 @@ REQUIRED_BLOCKS: dict[str, list[tuple[str, str]]] = {
         ("Tier companion decisions:", "Tier companion decisions required block"),
         ("Tier promotion probe:", "Tier promotion probe required block"),
         ("## Coordination with other skills", "Coordination/Handoff section"),
+        ("## Confirmation Rule", "Confirmation Rule section"),
+    ],
+    "quaere-naming": [
+        ("### 4. Availability gate", "availability gate step"),
+        ("tool-verified", "executed-probe label marker"),
+        ("## Handoff to other skills", "Handoff to other skills section"),
     ],
     "quaere-semantic": [
         ("## Meaningful unit selection", "Meaningful unit selection section"),
@@ -61,11 +69,17 @@ REQUIRED_BLOCKS: dict[str, list[tuple[str, str]]] = {
 REQUIRED_FIELDS = {"name", "description", "compatibility", "license"}
 KEBAB_CASE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 YAML_QUOTED_SCALAR = re.compile(r"^(['\"]).*\1$")
+# Relative path mentions in a SKILL.md body that must resolve to real files
+# inside the skill directory (guards distillation commits that drop files).
+RELATIVE_REFERENCE = re.compile(
+    r"(?:references|templates|scripts)/[A-Za-z0-9._/-]+\.(?:md|sh|py)"
+)
 ASSERTION_REQUIRED_KEYS = {
     "contains": ("text",),
     "contains_any": ("texts",),
     "not_contains": ("text",),
     "regex": ("pattern",),
+    "not_regex": ("pattern",),
     "ordered_sections": ("patterns",),
     "min_section_count": ("pattern", "min"),
     "requires_pair": ("if_contains", "must_also_contain"),
@@ -197,12 +211,23 @@ def check_reference_tocs(skill_dir: Path, errors: list[str]) -> None:
             )
 
 
+def check_relative_references(skill_dir: Path, errors: list[str]) -> None:
+    """Relative path mentions in SKILL.md must resolve inside the skill directory."""
+    skill_md = skill_dir / "SKILL.md"
+    text = skill_md.read_text(encoding="utf-8")
+    for rel in sorted(set(RELATIVE_REFERENCE.findall(text))):
+        if not (skill_dir / rel).is_file():
+            fail(errors, f"{skill_md}: broken relative reference: {rel} does not exist")
+
+
 def validate_skill(
     skill_dir: Path,
     readme_text: str,
     examples_text: str,
     scenario_skills: set[str],
     errors: list[str],
+    *,
+    readme_ja_text: str | None = None,
 ) -> None:
     skill_md = skill_dir / "SKILL.md"
     if not skill_md.exists():
@@ -244,6 +269,7 @@ def validate_skill(
     check_anchor_positions(skill_md, errors)
     check_stop_reminder_shorter(skill_md, errors)
     check_reference_tocs(skill_dir, errors)
+    check_relative_references(skill_dir, errors)
 
     group = skill_dir.parent.name
     if group in ("core", "extensions"):
@@ -252,6 +278,8 @@ def validate_skill(
         readme_ref = f"skills/{skill_dir.name}"
     if readme_ref not in readme_text:
         fail(errors, f"README.md: missing reference to {readme_ref}")
+    if readme_ja_text is not None and readme_ref not in readme_ja_text:
+        fail(errors, f"README.ja.md: missing reference to {readme_ref}")
 
     example_heading = f"## `{skill_dir.name}`"
     if example_heading not in examples_text:
@@ -327,6 +355,55 @@ def load_scenario_skills(path: Path, errors: list[str]) -> set[str]:
     return scenario_skills
 
 
+def _git_tracked_paths(root: Path) -> list[str] | None:
+    """Tracked paths if root is a git work tree and git is runnable; None otherwise."""
+    try:
+        probe = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--is-inside-work-tree"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    if (probe.returncode != 0 or probe.stdout.strip() != "true") and not (root / ".git").exists():
+        return None
+    try:
+        listing = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    if listing.returncode != 0:
+        return None
+    return [p for p in listing.stdout.split("\0") if p]
+
+
+def check_agent_state(root: Path, errors: list[str]) -> None:
+    """Committed .agent-state is an error; untracked local state is allowed.
+
+    .agent-state/ is gitignored, so mere disk presence is normal after using
+    the skills in-repo. In a git work tree only git-tracked paths count;
+    outside git (or when git is unavailable) fall back to disk presence.
+    """
+    tracked = _git_tracked_paths(root)
+    if tracked is not None:
+        offenders: set[str] = set()
+        for rel in tracked:
+            parts = rel.split("/")
+            if ".agent-state" in parts:
+                offenders.add("/".join(parts[: parts.index(".agent-state") + 1]))
+        for offender in sorted(offenders):
+            fail(errors, f"local investigation state should not be committed: {root / offender}")
+        return
+    for path in root.rglob(".agent-state"):
+        if ".git" not in path.parts:
+            fail(errors, f"local investigation state should not be committed: {path}")
+
+
 def main() -> int:
     errors: list[str] = []
 
@@ -338,12 +415,11 @@ def main() -> int:
         fail(errors, "missing examples/README.md")
 
     readme_text = README.read_text(encoding="utf-8") if README.exists() else ""
+    readme_ja_text = README_JA.read_text(encoding="utf-8") if README_JA.exists() else None
     examples_text = EXAMPLES.read_text(encoding="utf-8") if EXAMPLES.exists() else ""
     scenario_skills = load_scenario_skills(SCENARIOS, errors)
 
-    for path in ROOT.rglob(".agent-state"):
-        if ".git" not in path.parts:
-            fail(errors, f"local investigation state should not be committed: {path}")
+    check_agent_state(ROOT, errors)
 
     skill_names: set[str] = set()
     if SKILLS_DIR.is_dir():
@@ -359,7 +435,14 @@ def main() -> int:
             fail(errors, "skills/core and skills/extensions contain no skill directories")
         for skill_dir in skill_dirs:
             skill_names.add(skill_dir.name)
-            validate_skill(skill_dir, readme_text, examples_text, scenario_skills, errors)
+            validate_skill(
+                skill_dir,
+                readme_text,
+                examples_text,
+                scenario_skills,
+                errors,
+                readme_ja_text=readme_ja_text,
+            )
 
     for scenario_skill in sorted(scenario_skills - skill_names):
         fail(errors, f"evals/scenarios.json: scenario references unknown skill {scenario_skill!r}")
