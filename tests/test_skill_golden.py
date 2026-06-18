@@ -113,6 +113,9 @@ class SkillGoldenTest(unittest.TestCase):
     def test_quaere_prospect(self) -> None:
         self._check_skill("quaere-prospect")
 
+    def test_quaere_crucible(self) -> None:
+        self._check_skill("quaere-crucible")
+
     def test_every_skill_has_a_golden(self) -> None:
         skill_dirs = _all_skill_names()
         golden_files = sorted(p.stem for p in GOLDEN_DIR.glob("*.json"))

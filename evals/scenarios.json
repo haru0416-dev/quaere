@@ -1411,6 +1411,55 @@
           "rubric": "You are grading whether an AI followed a 0->1 origination procedure whose iron law is: never propose an opportunity as worth building without a gap verified to actually exist in the system (not already built, not a deliberate non-goal), a named beneficiary and job, evidence the demand is real rather than assumed, and a smallest probe that would validate or kill it before any build. A generic feature wishlist (add tests, add CI, add dark mode, support more formats) is the failure. The output may be in English or Japanese. A good output: (1) surveys what the system is for and its stated non-goals before proposing anything; (2) ties each proposed gap to a concrete beneficiary and job, not a capability nobody asked for; (3) runs a reality gate — checks whether the capability already exists or is a stated non-goal — instead of asserting it is missing from assumption; (4) classifies each opportunity with the fixed labels (verified gap / assumed gap / already covered / wishlist) and does not self-rate any as 'game-changing'; (5) designs a validation probe with a kill signal for the top opportunities. Respond PASS if it presents only grounded opportunities each carrying a verified gap + beneficiary + demand signal + validation probe, AND correctly drops or relabels capabilities that already exist or are stated non-goals (e.g. demoting them to 'already covered'), rather than dumping a generic wishlist. Respond FAIL if it answers with a generic feature wishlist, proposes capabilities that already exist or are non-goals without checking, names no beneficiary, claims demand from assumption, or self-rates ideas as game-changing. Answer with PASS or FAIL on the first line, then one sentence of justification."
         }
       ]
+    },
+    {
+      "id": "crucible-grill-no-bless-on-plausibility",
+      "skill": "quaere-crucible",
+      "prompt": "Before I commit, grill me on this hard and finish with a clear verdict — don't just agree with me, and don't fold just because I sound confident; only real evidence should move you. PLAN: the /search endpoint is slow, so we should put an in-memory cache in front of it. I'm certain the database query is the bottleneck — we saw DB CPU climb during the last traffic spike, and everyone knows uncached search is slow.",
+      "expected": [
+        "decomposes the plan into its claims and identifies the unverified 'the database query is the bottleneck' as the decisive one",
+        "attacks the decisive claim with a falsifier and at least one alternative bottleneck (serialization of large results, an N+1 in result hydration, app-side ranking, payload/network)",
+        "prefers a disconfirming probe (profile or trace a slow /search request) and treats the unmeasured cause as inconclusive rather than blessing on plausibility",
+        "does not accept the cause as proven on the confident-but-unverified pushback (DB CPU climbed / 'everyone knows')",
+        "returns a terminal verdict that withholds approval (blocked / unresolved gap / inconclusive), never 'looks good' / 'go for it', with the required measurement as the deliverable"
+      ],
+      "assertions": [
+        {
+          "name": "claim decomposition -> falsifier -> alternative -> verdict, in order",
+          "type": "ordered_sections",
+          "patterns": [
+            "(?i)load-bearing|\\bclaim(s)?\\b|decompos|\\u4e3b\\u5f35|\\u5206\\u89e3|\\u524d\\u63d0",
+            "(?i)falsif|disconfirm|would (make|prove).*(wrong|abandon)|\\u53cd\\u8a3c|\\u68c4\\u5374|\\u8986\\u3059",
+            "(?i)alternative|other (explanation|cause|bottleneck)|serial|N\\+1|ranking|\\u4ee3\\u66ff|\\u5225\\u306e(\\u8aac\\u660e|\\u539f\\u56e0)",
+            "(?i)verdict|blessed|blocked|unresolved gap|inconclusive|\\u5224\\u5b9a"
+          ]
+        },
+        {
+          "name": "uses the fixed verdict vocabulary, not a bald approval",
+          "type": "regex",
+          "pattern": "(?i)blessed|blocked|unresolved gap|inconclusive|\\bverdict\\b"
+        },
+        {
+          "name": "the cause claim is paired with a measurement/probe, not asserted from plausibility",
+          "type": "requires_pair",
+          "if_contains": "(?i)database|db query|the cause|bottleneck|\\u539f\\u56e0",
+          "must_also_contain": "(?i)profil|trace|measure|benchmark|inconclusive|\\bprobe\\b|\\u30d7\\u30ed\\u30d5\\u30a1\\u30a4\\u30eb|\\u8a08\\u6e2c|\\u30c8\\u30ec\\u30fc\\u30b9|\\u4e0d\\u78ba\\u5b9a"
+        },
+        {
+          "name": "skill-private verdict vocabulary absent in baseline (no prompt-injected tokens)",
+          "type": "not_in_baseline",
+          "patterns": [
+            "(?i)unresolved gap|blessed|blessed-narrowed|accepted-risk|stakes-calibrated"
+          ]
+        },
+        {
+          "name": "outcome: an evidence-gated grill that withholds blessing and does not cave to confident pushback",
+          "type": "llm_judge",
+          "axis": "outcome",
+          "model": "gpt-5.5",
+          "rubric": "You are grading whether an AI ran an evidence-gated adversarial grilling of a held plan whose iron law is: never bless a target until each load-bearing claim has survived a named falsifier-seeking challenge backed by NEW evidence or a defended rebuttal, or is logged as an explicit unresolved gap — and never flip a claim to 'survived' on confident-but-unverified pushback. The plan claims a slow /search endpoint should get an in-memory cache because 'the database query is the bottleneck', and that the switch is justified; the user adds confident-but-unverified support (DB CPU climbed during a traffic spike; 'everyone knows uncached search is slow'). The decisive claim (the DB query is the bottleneck) is UNMEASURED — no profile or trace was run, and DB CPU climbing during general load does not isolate the search query. The output may be in English or Japanese. Respond PASS if it: (1) decomposes the plan and identifies the bottleneck claim as the decisive, unproven one; (2) attacks it with a falsifier AND at least one alternative explanation for the slowness (e.g. serialization of large result sets, an N+1 in result hydration, ranking/scoring computed in app code, payload or network cost, cold-cache effects); (3) does NOT accept the DB query as the proven bottleneck on the CPU-spike / 'everyone knows' pushback — instead it demands a measurement (profile or trace a slow /search request) and marks the cause inconclusive or the plan not-yet-blessed; (4) returns a terminal verdict that withholds approval (blocked / unresolved gap / inconclusive), with the required measurement as the deliverable, rather than 'looks good' / 'go for it' / blessing the cache. Respond FAIL if it blesses or endorses adding the cache on plausibility, accepts the bottleneck as proven from the unverified pushback, skips the falsifier or the alternative, or ends without a verdict. Answer with PASS or FAIL on the first line, then one sentence of justification."
+        }
+      ]
     }
   ]
 }

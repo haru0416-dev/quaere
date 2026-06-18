@@ -70,6 +70,11 @@ REQUIRED_BLOCKS: dict[str, list[tuple[str, str]]] = {
         ("wishlist", "fixed opportunity label set (slop marker)"),
         ("## Handoff to other skills", "Handoff to other skills section"),
     ],
+    "quaere-crucible": [
+        ("unresolved gap", "fixed verdict/blessing label set (anti rubber-stamp)"),
+        ("accepted-risk", "user-override semantics (gate not silently dropped)"),
+        ("## Handoff to other skills", "Handoff to other skills section"),
+    ],
 }
 REQUIRED_FIELDS = {"name", "description", "compatibility", "license"}
 KEBAB_CASE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
