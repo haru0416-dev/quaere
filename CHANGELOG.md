@@ -4,6 +4,10 @@ All notable changes to Quaere are documented in this file. The format follows [K
 
 ## [Unreleased]
 
+### Added
+
+- **`quaere-prospect` extension** — a 0→1 origination skill for deciding what to build next before any problem is chosen: survey the terrain and its stated non-goals, inventory gaps each tied to a named beneficiary and job, run a mandatory reality gate (the capability may already exist or be a deliberate non-goal), and design a validation probe before any build — classifying each opportunity as `verified gap` / `assumed gap` / `already covered` / `wishlist` so origination does not collapse into a generic feature wishlist. Sits before `quaere-invention` in the pipeline (`prospect → invention → grounding/evidence → execution`). Opt-in: `quaere install --skill prospect`.
+
 ## [0.6.0] — 2026-06-13
 
 Adds the `quaere-naming` extension and tightens the existing skills: every prescriptive gate now sits within Codex CLI's ~220-line SKILL.md read cap, the certainty labels (`confirmed` / `confident` / `locally novel`) can no longer be claimed without the probe that earns them, and the eval harness gains an outcome-axis judge on every scenario plus a `not_regex` assertion type. The CLI interface is unchanged; the published headline numbers still come from the v0.3.1 sweep and predate these skill-body changes.
