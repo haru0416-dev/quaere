@@ -1,0 +1,25 @@
+{
+  "max_lines": 230,
+  "required_sections": [
+    "^## Iron Law$",
+    "^## When to use$",
+    "^## When NOT to use$",
+    "^## Handoff triggers",
+    "^## Core procedure$",
+    "^## Output format$",
+    "^## Common drift modes",
+    "^## Worked example$",
+    "^## Handoff to other skills$",
+    "^## Stop condition$"
+  ],
+  "forbidden_patterns": [
+    "(?<![a-z-])semantic-review(?![a-z])",
+    "(?<![a-z-])external-grounding(?![a-z])",
+    "(?<![a-z-])evidence-gated-review(?![a-z])",
+    "(?<![a-z-])execution-loop(?![a-z])",
+    "(?<![a-z-])security-audit-loop(?![a-z])",
+    "\\bTODO:",
+    "\\bFIXME:",
+    "\\bXXX:"
+  ]
+}

@@ -1354,6 +1354,63 @@
           "must_also_contain": "(?i)confident|plausible|UNKNOWN"
         }
       ]
+    },
+    {
+      "id": "prospect-grounded-opportunities-not-wishlist",
+      "skill": "quaere-prospect",
+      "prompt": "Here is csvplot, a small open-source CLI that turns one CSV file into a static PNG chart. Its README lists non-goals: not a dashboard, not interactive, no live data sources. We are not sure what to build next. Survey the codebase first, find real gaps tied to actual users instead of a generic wishlist, check whether each capability already exists in the code or is a stated non-goal before proposing it, and for the best opportunities design a small probe that would validate or kill the idea before we build. Do not just answer 'add tests, add CI, add dark mode, support more formats'.",
+      "expected": [
+        "surveys the system's purpose and stated non-goals before proposing any gap",
+        "inventories candidate gaps tagged by kind, separating absent from present-but-weak and deliberately out-of-scope",
+        "names a beneficiary and a job-to-be-done for each gap and marks demand as evidenced or assumed",
+        "runs a reality gate that checks whether each capability already exists or is a non-goal instead of proposing from assumption",
+        "designs a validation probe with a kill signal for the top opportunities before any build",
+        "classifies opportunities as verified gap / assumed gap / already covered / wishlist and never self-rates one as game-changing"
+      ],
+      "assertions": [
+        {
+          "name": "survey -> gaps -> beneficiary/demand -> probe -> handoff, in order",
+          "type": "ordered_sections",
+          "patterns": [
+            "(?i)survey|terrain|non-goal|boundary|what it is for|調査|踏査|境界|非ゴール|スコープ",
+            "(?i)\\bgap\\b|missing|inventory|candidate|ギャップ|不足|棚卸|候補",
+            "(?i)beneficiar|who is blocked|job-to-be-done|\\bdemand\\b|受益者|困る|需要|ジョブ",
+            "(?i)\\bprobe\\b|validate|kill signal|プローブ|検証|棄却",
+            "(?i)handoff|required next skill|hand off|ハンドオフ|次のスキル"
+          ]
+        },
+        {
+          "name": "at least two reality-gate existence/non-goal checks, not mere assertion",
+          "type": "min_section_count",
+          "pattern": "(?i)\\b(already exist|already built|grep|reality gate|non-goal|out of scope)\\b|既存|実在|スコープ外|非ゴール",
+          "min": 2
+        },
+        {
+          "name": "uses the fixed opportunity-label vocabulary, not self-rated hype",
+          "type": "regex",
+          "pattern": "(?i)verified gap|assumed gap|already covered|wishlist|ウィッシュリスト"
+        },
+        {
+          "name": "a presented opportunity is paired with a beneficiary or demand evidence, not a bare wishlist",
+          "type": "requires_pair",
+          "if_contains": "(?i)opportunity|propose|build next|\\bO-0|機会|提案|候補",
+          "must_also_contain": "(?i)beneficiar|who is blocked|demand|evidence|verified gap|受益者|需要|証拠|検証"
+        },
+        {
+          "name": "reality-gate / iron-law framing appears only with the skill, not in baseline",
+          "type": "not_in_baseline",
+          "patterns": [
+            "(?i)reality gate|validation probe|verified gap|wishlist|already covered|リアリティゲート|検証プローブ|ウィッシュリスト"
+          ]
+        },
+        {
+          "name": "outcome: grounded, reality-gated opportunities that never ship a wishlist",
+          "type": "llm_judge",
+          "axis": "outcome",
+          "model": "gpt-5.5",
+          "rubric": "You are grading whether an AI followed a 0->1 origination procedure whose iron law is: never propose an opportunity as worth building without a gap verified to actually exist in the system (not already built, not a deliberate non-goal), a named beneficiary and job, evidence the demand is real rather than assumed, and a smallest probe that would validate or kill it before any build. A generic feature wishlist (add tests, add CI, add dark mode, support more formats) is the failure. The output may be in English or Japanese. A good output: (1) surveys what the system is for and its stated non-goals before proposing anything; (2) ties each proposed gap to a concrete beneficiary and job, not a capability nobody asked for; (3) runs a reality gate — checks whether the capability already exists or is a stated non-goal — instead of asserting it is missing from assumption; (4) classifies each opportunity with the fixed labels (verified gap / assumed gap / already covered / wishlist) and does not self-rate any as 'game-changing'; (5) designs a validation probe with a kill signal for the top opportunities. Respond PASS if it presents only grounded opportunities each carrying a verified gap + beneficiary + demand signal + validation probe, AND correctly drops or relabels capabilities that already exist or are stated non-goals (e.g. demoting them to 'already covered'), rather than dumping a generic wishlist. Respond FAIL if it answers with a generic feature wishlist, proposes capabilities that already exist or are non-goals without checking, names no beneficiary, claims demand from assumption, or self-rates ideas as game-changing. Answer with PASS or FAIL on the first line, then one sentence of justification."
+        }
+      ]
     }
   ]
 }

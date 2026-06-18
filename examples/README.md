@@ -114,6 +114,21 @@ Expected behavior:
 - Runs a mandatory availability gate — competitor search first, then real platform checks (whois / npm / GitHub) — never claiming availability from memory.
 - Presents 3–5 finalists, each with a 15-second origin story and tool-verified availability status, and loops back rather than lowering the bar if fewer than 3 survive.
 
+## `quaere-prospect`
+
+Prompt:
+
+> Here's our open-source CLI that converts CSV files into static PNG charts. We're not sure what to build next — what should we add?
+
+Expected behavior:
+
+- Surveys the terrain first — what the system is for and its stated non-goals — before proposing any gap.
+- Inventories candidate gaps tagged by kind, separating absent from present-but-weak and deliberately out-of-scope.
+- Names a beneficiary and a job-to-be-done for each gap and marks demand as evidenced or assumed; kills gaps with no nameable beneficiary.
+- Runs a mandatory reality gate — greps the codebase for capabilities that already exist and checks docs/non-goals — never proposing a gap from assumption.
+- Designs a validation probe (demand or feasibility, with a kill signal) for the top opportunities before any build.
+- Classifies each opportunity as verified gap / assumed gap / already covered / wishlist, never self-rates one as "game-changing", and hands survivors off with a stop condition.
+
 ## Combined pipeline
 
 Prompt:
