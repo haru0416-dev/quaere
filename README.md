@@ -8,7 +8,7 @@
 
 Coding agents rarely fail by saying "I do not know." They fail by sounding finished too early: they skim code, accept plausible claims, patch a wide diff, and report success before the cause is proven.
 
-Quaere is four core [skills](https://docs.claude.com/en/docs/claude-code/skills) plus four opt-in extensions for Claude Code, Codex CLI, and other skill-aware coding agents. A skill is a markdown file the agent loads on demand based on task context — each core skill gates a different drift point: read the code semantically, ground external facts, prove claims, and execute changes in small verified steps. The extensions add security auditing, structured ideation, naming, and 0→1 origination on top.
+Quaere is four core [skills](https://docs.claude.com/en/docs/claude-code/skills) plus five opt-in extensions for Claude Code, Codex CLI, and other skill-aware coding agents. A skill is a markdown file the agent loads on demand based on task context — each core skill gates a different drift point: read the code semantically, ground external facts, prove claims, and execute changes in small verified steps. The extensions add security auditing, structured ideation, naming, 0→1 origination, and adversarial pressure-testing on top.
 
 > Quaere is an independent project, not affiliated with or endorsed by Anthropic. The skills run through Claude Code's and Codex CLI's built-in skill systems.
 
@@ -25,7 +25,7 @@ In the in-tree eval sweep measured at v0.3.1, the same scenarios scored **53%** 
 
 ## Measured effect
 
-The headline comes from the in-tree eval sweep against the v0.3.1 skill set. Skill bodies have changed since the measurement: v0.5.0 reorganized every skill for the Codex read cap, and unreleased commits since then added the `quaere-naming` and `quaere-prospect` extensions, distilled `quaere-semantic` to its measured active core, and gated the `confident` / `locally novel` certainty labels on an executed probe. The published sweep numbers predate those changes:
+The headline comes from the in-tree eval sweep against the v0.3.1 skill set. Skill bodies have changed since the measurement: v0.5.0 reorganized every skill for the Codex read cap, and unreleased commits since then added the `quaere-naming`, `quaere-prospect`, and `quaere-crucible` extensions, distilled `quaere-semantic` to its measured active core, and gated the `confident` / `locally novel` certainty labels on an executed probe. The published sweep numbers predate those changes:
 
 | mode                | assertion pass rate | scenario-level     |
 | ------------------- | ------------------: | -----------------: |
@@ -85,6 +85,7 @@ installs the core set; extensions are installed on request
 | [`skills/extensions/quaere-invention`](skills/extensions/quaere-invention/SKILL.md) | You need a non-obvious approach, alternative architecture, research direction, product or monetization idea, or agent-skill design before committing to a plan. | Forces the agent to name the default basin it is escaping, break assumptions through structured mutation passes, classify novelty honestly with fixed labels (no self-rated "truly novel"), and design a kill-probe before promoting an idea. Install with `quaere install --skill invention`. |
 | [`skills/extensions/quaere-naming`](skills/extensions/quaere-naming/SKILL.md) | You need to name a product, SaaS, brand, library, open source project, CLI, bot, or app, or escape generic AI-slop names. | Forces a metaphor-driven process — naming brief before any name, conceptual territories instead of thesaurus synonyms, anti-pattern filtering, and a mandatory tool-verified availability gate (never from memory) — so only vetted finalists with origin stories reach the user. Install with `quaere install --skill naming`. |
 | [`skills/extensions/quaere-prospect`](skills/extensions/quaere-prospect/SKILL.md) | You are deciding what to build next — a missing feature, tool, product, or improvement in a codebase or domain — before any problem is chosen, and want grounded opportunities instead of a generic wishlist. | Forces every opportunity to name a gap verified to exist in the actual system, a beneficiary and the job they are blocked on, demand evidence (not assumed), and a validation probe — classifying each as verified gap, assumed gap, already covered, or wishlist (no self-rated "game-changing"). Install with `quaere install --skill prospect`. |
+| [`skills/extensions/quaere-crucible`](skills/extensions/quaere-crucible/SKILL.md) | You want a plan, claim, design, decision, PR, or your own understanding adversarially pressure-tested before you commit ("grill me", "poke holes", "red-team this"), or an agent should grill its own plan before shipping. | Decomposes the target into load-bearing claims and grills each with a falsifier and an alternative-hypothesis question, refusing to bless it until each claim survived on new evidence or a defended rebuttal (never on confident-but-unverified pushback) or is logged as an unresolved gap. Intensity scales with stakes. Install with `quaere install --skill crucible`. |
 
 ## Picking a skill
 
@@ -109,6 +110,8 @@ When the risk is settling on the obvious answer too early — choosing an approa
 
 When the risk is upstream of that — not which approach, but *what to build at all* (a missing feature, tool, or product before any problem is chosen) — install the `quaere-prospect` extension (`quaere install --skill prospect`). It runs before invention (`prospect → invention → grounding/evidence → execution`): prospect finds the gap worth solving, invention finds the non-obvious way to solve it. Every opportunity it presents names a verified gap, a beneficiary, demand evidence, and a validation probe — not a generic wishlist.
 
+When the risk is on the other side of commitment — a plan, claim, design, PR, or your own understanding that *feels* solid but has not survived a serious attempt to break it — install the `quaere-crucible` extension (`quaere install --skill crucible`). It is the Quaere-style "Grill Me": it decomposes the target into load-bearing claims, attacks the most decisive one with a falsifier and an alternative, and refuses to bless it until each claim survives on new evidence (or is logged as an unresolved gap) — and it will not cave to confident-but-unverified pushback. It runs at the commitment boundary, before `quaere-execution`.
+
 ### Standalone: match the main risk
 
 Use the first matching row that describes the main risk in the task:
@@ -122,6 +125,7 @@ Use the first matching row that describes the main risk in the task:
 | The task is to discover or validate vulnerabilities from specs and attack surfaces. | `quaere-audit` (extension) | It coordinates `quaere-semantic`, `quaere-grounding`, `quaere-evidence`, and `quaere-execution` as needed. |
 | You are about to commit to the obvious approach and want to widen the option space first. | `quaere-invention` (extension) | Hands surviving candidates with kill-probes to `quaere-grounding`, `quaere-evidence`, or `quaere-execution`. |
 | You need to decide what to build next, before any problem is chosen, and want grounded gaps instead of a wishlist. | `quaere-prospect` (extension) | Hands verified gaps with validation probes to `quaere-invention` (for the approach), `quaere-grounding`, `quaere-evidence`, or `quaere-execution`. |
+| A plan, claim, design, or PR *feels* solid but has not survived a real attempt to break it, and you are about to commit. | `quaere-crucible` (extension) | Hands blessed claims and an unresolved-gap list to `quaere-execution`; a challenge needing an executed probe to `quaere-evidence`, or a second-model counter to `cross-check`. |
 
 ### Tie-breaker
 
@@ -134,6 +138,7 @@ If two skills seem plausible, choose the one that answers the blocking question 
 - "What security properties can fail?" → `quaere-audit`
 - "Are we trapped in the obvious solution space?" → `quaere-invention`
 - "What is even worth building here?" → `quaere-prospect`
+- "Would this survive a serious grilling before I commit?" → `quaere-crucible`
 
 ## Installation
 

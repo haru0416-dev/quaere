@@ -129,6 +129,20 @@ Expected behavior:
 - Designs a validation probe (demand or feasibility, with a kill signal) for the top opportunities before any build.
 - Classifies each opportunity as verified gap / assumed gap / already covered / wishlist, never self-rates one as "game-changing", and hands survivors off with a stop condition.
 
+## `quaere-crucible`
+
+Prompt:
+
+> Login is slow, so we should switch the session store from Postgres to Redis — it'll be much faster and it's low-risk. Grill me on this before I write up the migration.
+
+Expected behavior:
+
+- Decomposes the plan into load-bearing claims (the cause is the session store; Redis fixes it; the switch is low-risk) and triages by stakes before grilling.
+- Grills the most-decisive claim first with the two mandatory questions — a falsifier ("what would make you abandon this?") and an alternative hypothesis ("what else explains slow login?") — and prefers a disconfirming probe ("have you profiled the login path, or only inferred the cause?").
+- Does NOT flip a claim to survived on confident-but-unverified pushback (e.g. "Postgres CPU spiked, everyone knows it's bad at session churn") — only on new evidence or a defended rebuttal.
+- Marks the unmeasured-cause claim inconclusive and hands the executed profile off to quaere-evidence, rather than blessing around it.
+- Returns a terminal verdict (blessed / blessed-narrowed / blocked / unresolved gap), never "looks fine"; when blessing is withheld the explicit gap list is the deliverable.
+
 ## Combined pipeline
 
 Prompt:

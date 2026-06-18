@@ -7,6 +7,7 @@ All notable changes to Quaere are documented in this file. The format follows [K
 ### Added
 
 - **`quaere-prospect` extension** — a 0→1 origination skill for deciding what to build next before any problem is chosen: survey the terrain and its stated non-goals, inventory gaps each tied to a named beneficiary and job, run a mandatory reality gate (the capability may already exist or be a deliberate non-goal), and design a validation probe before any build — classifying each opportunity as `verified gap` / `assumed gap` / `already covered` / `wishlist` so origination does not collapse into a generic feature wishlist. Sits before `quaere-invention` in the pipeline (`prospect → invention → grounding/evidence → execution`). Opt-in: `quaere install --skill prospect`.
+- **`quaere-crucible` extension** — a Quaere-style "Grill Me": an evidence-gated adversarial interrogation that pressure-tests a plan, claim, design, PR, or the agent's own proposed plan at the commitment boundary. It decomposes the target into load-bearing claims, grills the most decisive one with a mandatory falsifier and alternative-hypothesis question, and refuses to bless it until each claim survived on new evidence or a defended rebuttal — never on confident-but-unverified pushback — or is logged as an explicit unresolved gap. Returns a terminal verdict (`blessed` / `blessed-narrowed` / `blocked` / `unresolved gap`), never "looks fine"; intensity is calibrated to stakes. Opt-in: `quaere install --skill crucible`.
 
 ## [0.6.0] — 2026-06-13
 
