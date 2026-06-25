@@ -465,6 +465,7 @@ def run_job(
                 "status": status,
             }
         )
+        metadata.update(extract_usage(stdout, stderr))
 
     persisted = public_metadata(metadata)
     metadata_file.write_text(json.dumps(persisted, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -484,6 +485,153 @@ def public_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     """
     public = {k: v for k, v in metadata.items() if not k.startswith("__")}
     return {k: (str(v) if isinstance(v, Path) else v) for k, v in public.items()}
+
+
+# --- usage / cost measurement -------------------------------------------------
+# codex exec (human output) prints `model: <id>` and a trailing `tokens used\n<N>`
+# to stderr; `codex exec --json` emits a `turn.completed` event with a structured
+# `usage` object on stdout. extract_usage prefers the precise JSON split and falls
+# back to the stderr total, so token/cost reporting works with the existing runner
+# (no --json needed) and gets sharper when --json is used. Parsing is defensive: a
+# runner-format change degrades to "no usage captured", never a failed run.
+_TOKENS_USED_RE = re.compile(r"tokens?\s+used[\s:]*([\d,]+)", re.IGNORECASE)
+_MODEL_RE = re.compile(r"^\s*model:\s*(\S+)", re.IGNORECASE | re.MULTILINE)
+
+
+def extract_usage(stdout: str, stderr: str) -> dict[str, Any]:
+    """Best-effort token + model extraction from a runner's captured streams.
+
+    Returns any of {model, tokens_total, tokens_input, tokens_output,
+    cached_input_tokens}; empty when the runner emits none. tokens_input/output
+    are only set when a precise split is available, so they never feed the
+    behavior grader with a guessed value.
+    """
+    usage: dict[str, Any] = {}
+    model = _MODEL_RE.search(stderr or "")
+    if model:
+        usage["model"] = model.group(1)
+
+    # Precise split from a codex --json `turn.completed` usage event (last wins).
+    precise: dict[str, Any] | None = None
+    for line in (stdout or "").splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("{") or '"usage"' not in stripped:
+            continue
+        try:
+            event = json.loads(stripped)
+        except json.JSONDecodeError:
+            continue
+        candidate = event.get("usage")
+        if isinstance(candidate, dict) and "input_tokens" in candidate and "output_tokens" in candidate:
+            precise = candidate
+    if precise is not None:
+        inp = int(precise.get("input_tokens", 0) or 0)
+        out = int(precise.get("output_tokens", 0) or 0) + int(precise.get("reasoning_output_tokens", 0) or 0)
+        usage["tokens_input"] = inp
+        usage["tokens_output"] = out
+        usage["cached_input_tokens"] = int(precise.get("cached_input_tokens", 0) or 0)
+        usage["tokens_total"] = inp + out
+        return usage
+
+    # Fallback: codex human-output stderr total ("tokens used\n13,184"). The
+    # running total is printed last, so take the final match.
+    matches = _TOKENS_USED_RE.findall(stderr or "")
+    if matches:
+        usage["tokens_total"] = int(matches[-1].replace(",", ""))
+    return usage
+
+
+def cost_usd(usage: dict[str, Any], price_input: float | None, price_output: float | None) -> dict[str, Any] | None:
+    """USD estimate for one run from per-MTok prices, or None if not priceable.
+
+    Exact when the input/output split is known; otherwise approximates the total
+    at the output rate (an upper bound) and labels the basis so it is not mistaken
+    for exact. No separate cached rate: cached input is billed at the input rate
+    (a small, conservative over-estimate).
+    """
+    if price_input is None or price_output is None:
+        return None
+    inp = usage.get("tokens_input")
+    out = usage.get("tokens_output")
+    if inp is not None and out is not None:
+        usd = inp / 1_000_000 * price_input + out / 1_000_000 * price_output
+        return {"usd": round(usd, 6), "basis": "exact-split"}
+    total = usage.get("tokens_total")
+    if total is None:
+        return None
+    return {"usd": round(total / 1_000_000 * price_output, 6), "basis": "approx-total-at-output-rate"}
+
+
+def summarize_usage(
+    results: list[dict[str, Any]],
+    price_input: float | None = None,
+    price_output: float | None = None,
+) -> dict[str, Any]:
+    """Aggregate token + duration (+ optional USD) per mode, per skill, and overall,
+    plus the with-skill-vs-baseline overhead delta. Runs missing token data are
+    tracked via runs_with_tokens so partial capture stays visible, not hidden.
+    """
+
+    def blank() -> dict[str, Any]:
+        return {"runs": 0, "runs_with_tokens": 0, "tokens_total": 0, "duration_seconds": 0.0, "usd": 0.0, "usd_priced_runs": 0}
+
+    overall = blank()
+    by_mode: dict[str, dict[str, Any]] = {}
+    by_skill: dict[str, dict[str, Any]] = {}
+
+    for item in results:
+        meta = item["metadata"]
+        if meta.get("dry_run"):
+            continue
+        buckets = (
+            overall,
+            by_mode.setdefault(meta.get("mode", "?"), blank()),
+            by_skill.setdefault(meta.get("skill", "?"), blank()),
+        )
+        tokens = meta.get("tokens_total")
+        duration = float(meta.get("duration_seconds") or 0.0)
+        cost = cost_usd(meta, price_input, price_output)
+        for b in buckets:
+            b["runs"] += 1
+            b["duration_seconds"] = round(b["duration_seconds"] + duration, 3)
+            if isinstance(tokens, int):
+                b["runs_with_tokens"] += 1
+                b["tokens_total"] += tokens
+            if cost is not None:
+                b["usd"] = round(b["usd"] + cost["usd"], 6)
+                b["usd_priced_runs"] += 1
+
+    def finalize(b: dict[str, Any]) -> dict[str, Any]:
+        out = dict(b)
+        out["mean_tokens_per_run"] = round(b["tokens_total"] / b["runs_with_tokens"]) if b["runs_with_tokens"] else None
+        out["mean_duration_seconds"] = round(b["duration_seconds"] / b["runs"], 3) if b["runs"] else None
+        if not b["usd_priced_runs"]:
+            out["usd"] = None  # nothing priced -> n/a, not a misleading 0.0
+        return out
+
+    by_mode_f = {k: finalize(v) for k, v in by_mode.items()}
+    base, skill = by_mode_f.get("baseline"), by_mode_f.get("with-skill")
+    overhead: dict[str, Any] | None = None
+    if base and skill and base.get("mean_tokens_per_run") and skill.get("mean_tokens_per_run"):
+        bt, st = base["mean_tokens_per_run"], skill["mean_tokens_per_run"]
+        overhead = {
+            "baseline_mean_tokens": bt,
+            "with_skill_mean_tokens": st,
+            "extra_tokens_per_run": st - bt,
+            "token_overhead_pct": round((st - bt) / bt * 100, 1) if bt else None,
+        }
+        if base.get("usd") is not None and skill.get("usd") is not None and base["runs"] and skill["runs"]:
+            overhead["extra_usd_per_run"] = round(skill["usd"] / skill["runs"] - base["usd"] / base["runs"], 6)
+
+    return {
+        "overall": finalize(overall),
+        "by_mode": by_mode_f,
+        "by_skill": {k: finalize(v) for k, v in by_skill.items()},
+        "overhead": overhead,
+        "priced": price_input is not None and price_output is not None,
+        "price_input_per_mtok": price_input,
+        "price_output_per_mtok": price_output,
+    }
 
 
 def grade_output(scenario: Scenario, output: str, metadata: dict[str, Any]) -> dict[str, Any]:
@@ -1273,7 +1421,12 @@ def build_pairs(results: list[dict[str, Any]]) -> dict[str, Any]:
     return {"per_scenario": per_scenario, "mcnemar": mcnemar}
 
 
-def write_summary(output_root: Path, results: list[dict[str, Any]]) -> Path:
+def write_summary(
+    output_root: Path,
+    results: list[dict[str, Any]],
+    price_input: float | None = None,
+    price_output: float | None = None,
+) -> Path:
     summary_path = output_root / "summary.json"
     totals = {
         "runs": len(results),
@@ -1292,6 +1445,7 @@ def write_summary(output_root: Path, results: list[dict[str, Any]]) -> Path:
         "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "output_root": str(output_root),
         "totals": totals,
+        "usage": summarize_usage(results, price_input, price_output),
         "cells": cells,
         "pairs": build_pairs(results),
         "runs": public_runs,
@@ -1324,6 +1478,23 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--skills-dir", type=Path, default=DEFAULT_SKILLS_DIR)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument(
+        "--price-input",
+        type=float,
+        default=None,
+        help=(
+            "Agent model price in USD per million INPUT tokens. Tokens and "
+            "duration are always measured; a USD estimate is only computed when "
+            "both --price-input and --price-output are set (omit for a "
+            "subscription/ChatGPT runner, where there is no per-token bill)."
+        ),
+    )
+    parser.add_argument(
+        "--price-output",
+        type=float,
+        default=None,
+        help="Agent model price in USD per million OUTPUT tokens. See --price-input.",
+    )
     parser.add_argument("--runner", action="append", type=parse_runner, required=True)
     parser.add_argument("--skill", help="Run only scenarios for one skill.")
     parser.add_argument("--scenario", action="append", default=[], help="Run only the named scenario ID. Repeatable.")
@@ -1529,7 +1700,7 @@ def main(argv: list[str]) -> int:
             f"{meta['status']} / {result['grade']['status']}"
         )
 
-    summary_path = write_summary(output_root, results)
+    summary_path = write_summary(output_root, results, args.price_input, args.price_output)
 
     if not args.dry_run:
         print(f"--- cell pass-rates (runs={total_runs}) ---")
@@ -1553,6 +1724,31 @@ def main(argv: list[str]) -> int:
             )
         if total_runs == 1:
             print("note: --runs 1 is single-sample and non-authoritative; use --runs 5+ for a measured result.")
+
+        usage = summarize_usage(results, args.price_input, args.price_output)
+        overall = usage["overall"]
+        if overall["runs"]:
+            print("--- usage / cost ---")
+            for mode in sorted(usage["by_mode"]):
+                b = usage["by_mode"][mode]
+                mean = f"{b['mean_tokens_per_run']:,}" if b["mean_tokens_per_run"] is not None else "n/a"
+                cost = f", ~${b['usd']:.4f}" if b["usd"] is not None else ""
+                print(
+                    f"{mode}: {b['runs']} runs, {b['tokens_total']:,} tokens "
+                    f"(mean {mean}/run), {b['duration_seconds']:.0f}s{cost}"
+                )
+            oh = usage["overhead"]
+            if oh:
+                pct = f" ({oh['token_overhead_pct']:+.1f}%)" if oh.get("token_overhead_pct") is not None else ""
+                extra_usd = f", ~${oh['extra_usd_per_run']:+.5f}/run" if oh.get("extra_usd_per_run") is not None else ""
+                print(f"skill token overhead: {oh['extra_tokens_per_run']:+,}/run{pct}{extra_usd} vs baseline")
+            if overall["usd"] is not None:
+                print(f"total: {overall['tokens_total']:,} tokens, ~${overall['usd']:.4f} over {overall['runs']} runs")
+            else:
+                print(
+                    f"total: {overall['tokens_total']:,} tokens over {overall['runs']} runs "
+                    "(set --price-input/--price-output for a $ estimate)"
+                )
     print(f"summary: {summary_path}")
 
     failed = False

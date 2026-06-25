@@ -17,10 +17,13 @@ from evals.run_skill_evals import (  # noqa: E402
     Scenario,
     aggregate_cells,
     assertion_axis,
+    cost_usd,
     evaluate_assertion,
+    extract_usage,
     grade_output,
     load_scenarios,
     mcnemar_exact_p,
+    summarize_usage,
 )
 
 
@@ -1514,6 +1517,71 @@ class LlmJudgeGraderTest(unittest.TestCase):
             self.assertEqual(r1["status"], "pass")
             self.assertEqual(r2["status"], "fail")
             self.assertEqual(call_log, ["server-a", "server-b"])
+
+
+class UsageAndCostTests(unittest.TestCase):
+    def test_extract_usage_from_stderr_total(self) -> None:
+        stderr = "model: gpt-5.5\nprovider: openai\nsession id: x\ncodex\nOK\ntokens used\n13,184\n"
+        usage = extract_usage("OK\n", stderr)
+        self.assertEqual(usage["model"], "gpt-5.5")
+        self.assertEqual(usage["tokens_total"], 13184)
+        # no guessed split — input/output stay absent so the behavior grader is not fed a guess
+        self.assertNotIn("tokens_input", usage)
+        self.assertNotIn("tokens_output", usage)
+
+    def test_extract_usage_prefers_json_split(self) -> None:
+        stdout = (
+            '{"type":"turn.started"}\n'
+            '{"type":"item.completed","item":{"type":"agent_message","text":"OK"}}\n'
+            '{"type":"turn.completed","usage":{"input_tokens":13090,'
+            '"cached_input_tokens":4992,"output_tokens":25,"reasoning_output_tokens":18}}\n'
+        )
+        usage = extract_usage(stdout, "model: gpt-5.5\n")
+        self.assertEqual(usage["tokens_input"], 13090)
+        self.assertEqual(usage["tokens_output"], 25 + 18)  # reasoning folded into output
+        self.assertEqual(usage["cached_input_tokens"], 4992)
+        self.assertEqual(usage["tokens_total"], 13090 + 43)
+
+    def test_extract_usage_empty_for_unknown_runner(self) -> None:
+        self.assertEqual(extract_usage("just an answer", "no usage here"), {})
+
+    def test_cost_usd_exact_approx_and_unpriced(self) -> None:
+        exact = cost_usd({"tokens_input": 1_000_000, "tokens_output": 1_000_000}, 1.0, 5.0)
+        self.assertEqual(exact, {"usd": 6.0, "basis": "exact-split"})
+        approx = cost_usd({"tokens_total": 1_000_000}, 1.0, 5.0)
+        self.assertEqual(approx, {"usd": 5.0, "basis": "approx-total-at-output-rate"})
+        self.assertIsNone(cost_usd({"tokens_total": 100}, None, None))
+
+    def test_summarize_usage_aggregates_and_overhead(self) -> None:
+        def run(mode: str, tokens: int, dur: float) -> dict[str, Any]:
+            return {"metadata": {"mode": mode, "skill": "quaere-evidence", "tokens_total": tokens, "duration_seconds": dur}}
+
+        results = [run("baseline", 100, 10.0), run("baseline", 100, 10.0), run("with-skill", 150, 12.0), run("with-skill", 150, 12.0)]
+        s = summarize_usage(results)
+        self.assertEqual(s["by_mode"]["baseline"]["tokens_total"], 200)
+        self.assertEqual(s["by_mode"]["with-skill"]["mean_tokens_per_run"], 150)
+        self.assertEqual(s["overall"]["tokens_total"], 500)
+        self.assertEqual(s["overhead"]["extra_tokens_per_run"], 50)
+        self.assertEqual(s["overhead"]["token_overhead_pct"], 50.0)
+        self.assertIsNone(s["overall"]["usd"])  # unpriced -> n/a, not 0.0
+
+    def test_summarize_usage_usd_when_priced(self) -> None:
+        def run(mode: str, tokens: int) -> dict[str, Any]:
+            return {"metadata": {"mode": mode, "skill": "s", "tokens_total": tokens, "duration_seconds": 1.0}}
+
+        s = summarize_usage([run("baseline", 1_000_000), run("with-skill", 2_000_000)], price_input=1.0, price_output=5.0)
+        self.assertEqual(s["by_mode"]["baseline"]["usd"], 5.0)  # total-only -> approx at output rate
+        self.assertEqual(s["by_mode"]["with-skill"]["usd"], 10.0)
+        self.assertAlmostEqual(s["overhead"]["extra_usd_per_run"], 5.0)
+
+    def test_dry_run_excluded_from_usage(self) -> None:
+        results = [
+            {"metadata": {"mode": "baseline", "skill": "s", "dry_run": True, "tokens_total": 999, "duration_seconds": 1.0}},
+            {"metadata": {"mode": "baseline", "skill": "s", "tokens_total": 100, "duration_seconds": 1.0}},
+        ]
+        s = summarize_usage(results)
+        self.assertEqual(s["overall"]["runs"], 1)
+        self.assertEqual(s["overall"]["tokens_total"], 100)
 
 
 if __name__ == "__main__":
