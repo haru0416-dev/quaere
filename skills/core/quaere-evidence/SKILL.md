@@ -1,69 +1,87 @@
 ---
 name: quaere-evidence
-description: This skill should be used whenever the user asks to investigate unclear bugs, defend or reject PR review comments, triage CI failures or flaky tests, review risky/security/database/concurrency/external-API changes or multi-file refactors, or make any claim that needs evidence before patching. It enforces a falsifiable Finding → Hypothesis / Review Claim → Defense → Probe → Decision → Patch → Verification → Handoff workflow so the agent does not jump to fixes, accept plausible but unverified explanations, or publish noisy review comments.
+description: This skill should be used whenever the user asks to investigate unclear bugs, defend or reject PR review comments, triage CI failures or flaky tests, review risky/security/database/concurrency/external-API changes or multi-file refactors, or make any claim that needs evidence before patching. It enforces a falsifiable claim → defense → probe → decision workflow so the agent does not jump to fixes, accept plausible but unverified explanations, or publish noisy review comments.
 compatibility: Designed for Claude Code, Codex, Opencode, and Agent Skills-compatible coding agents with file, search, shell, test, and git access.
 license: MIT
 ---
 
 # Evidence-Gated Review
 
+<!-- quaere:layer gate -->
 ## Iron Law
 
-**No patch, review comment, or root-cause conclusion without a falsifiable claim and at least one serious attempt to disconfirm it.**
-
-This is not ceremony. Review and debugging drift toward confirmation: once an agent sees a plausible cause, it collects facts that fit and edits before testing whether another explanation fits better. The gate is simple: before acting, state what would make the hypothesis or review claim wrong, run or name the smallest probe that could reveal that, then decide. If a claim cannot be falsified at the current scope, label it `inconclusive` or hand it off; do not promote it by sounding confident.
+**No patch, review comment, or root-cause conclusion without a falsifiable claim and one executed attempt to defeat it.**
 
 ## Output contract
 
-Emit these labeled sections exactly, in this order, even in lightweight mode: **Scope / safety constraints → Findings → Claims / Hypotheses → Defense and probes → Decision → Patch** *(omit if no fix is needed)* **→ Verification → Handoff**. If a section is not applicable, write: `skipped because: <reason>`
+Every claim or hypothesis acted on carries the four lines below. Everything else about format is the investigator's choice.
 
 ### Lightweight evidence pass
 
-When scope is small (one claim, low blast radius), collapse to this minimum — but never omit the falsifier or disconfirming probe:
-
-```
-Findings:
-- F1: <observed fact + source>
-
-Claim:
-- C1: <falsifiable claim>
-- Backing: F1
-- Falsifier: <what would prove it wrong>
-- Disconfirming probe: <probe / result, or "not yet run">
-
-Decision: confirmed | rejected | inconclusive | deferred
-
-Verification:
-- <fresh command / result, or "unavailable because ...">
+```text
+Claim: <what you assert>
+Evidence: <file:line / log / repro / trace>
+Falsifier: <the observation that would defeat this>
+Probe: <the check you ran trying to defeat it → its result>
 ```
 
-`confirmed` is legal here only when `Disconfirming probe:` shows an executed result — or, when the probe is unsafe or unavailable within scope, a defended rebuttal recorded per the Guardrails carve-out (`confirmed (rebuttal-substituted)`). With a bare `"not yet run"`, the only legal decisions are `rejected`, `inconclusive`, or `deferred`.
+## Decisions
 
-The full 10-field Review Claim format (in the Workflow section) applies to Standard and Deep investigations. The lightweight pass is the same gate run with fewer words — not a bypass.
+- `confirmed` — the probe ran and did not defeat the claim.
+- `confirmed (rebuttal-substituted)` — the probe is unsafe or unavailable in scope (production replay, payments, destructive ops); the strongest counter-explanation was argued from source, tests, or spec, and failed. Label it exactly so the substitution is auditable.
+- `rejected` / `inconclusive` / `deferred` — when the Probe line says "not run", these are the only legal labels.
+<!-- /quaere:layer -->
 
+<!-- quaere:layer method -->
 ## When to use
 
-- CI failures, flaky tests, regressions, or bugs where the cause is not already proven.
-- Risky PR reviews, reviewer comments, security claims, API contract concerns, database/concurrency changes, or multi-file refactors.
-- Any situation where a weak claim would create noisy review feedback, unnecessary code churn, data loss, auth bypass, production side effects, or a misleading handoff.
-- Any implementation blocked by deciding whether a claim is true.
+- CI failures, flaky tests, regressions, or bugs whose cause is not already proven.
+- Risky PR reviews, security claims, API contract concerns, database/concurrency changes, multi-file refactors.
+- Any claim that would create noisy review feedback or a misleading handoff if published unverified.
 
 ## When NOT to use
 
-- Typos, formatting-only edits, obvious one-line type errors, or a tiny user-requested edit where cause and fix are already known.
-- Pure code comprehension with no claim to decide; use `quaere-semantic` instead.
-- Version-sensitive external facts whose truth depends on current docs, SDKs, CLIs, APIs, or advisories; hand that sub-claim to `quaere-grounding`, then resume here.
+- Typos, formatting-only edits, or a tiny user-requested edit where cause and fix are already known.
+- Pure code comprehension with no claim to decide — use `quaere-semantic`.
+- Version-sensitive external facts whose truth depends on current docs or SDKs — hand that sub-claim to `quaere-grounding`, then resume.
 
-## Handoff triggers (when to switch out)
+## Probe budget
 
-Hand control to a companion skill when the blocking question shifts. Name the handoff and the reason — do not silently switch.
+One discriminating probe per decision — the check whose outcome differs between the claim and its best alternative. Two at most; if both are inconclusive, stop and hand off. Supporting evidence never substitutes for the disconfirming attempt. Running a flaky test N times for a pass rate is one probe with a sample size, not N retries.
 
-- A claim depends on a version-sensitive external fact (SDK / CLI / API / advisory / current docs) → `quaere-grounding`. Resume only after the fact carries a Decision label from `quaere-grounding`'s claim result matrix; treat anything other than `confirmed` as not-safe-to-use.
-- The reviewed code's intent or invariants are unclear before the claim can be evaluated → `quaere-semantic`.
-- A claim is confirmed and implementation is authorized → `quaere-execution`.
-- The work is a property-driven security audit rather than a single claim → if the `quaere-audit` extension is installed, defer to it as coordinator; otherwise flag the task as needing a security audit and escalate to the user.
+## Workflow
 
-The standard handoff payload (Blocking question / Confirmed inputs / Inconclusive inputs / Required next skill / Stop condition) and the per-skill payload details (e.g., the exact fields to include when handing to `quaere-grounding`) are documented at the end of this file under "Handoff to other skills".
+1. **Scope** — what is being decided, observed vs expected, what is out of bounds.
+2. **Facts before explanations** — read the diff, log, test, and source; note each fact with its source and its limit. "Validation is broken" is not a fact.
+3. **Claims with falsifiers** — the four-line shape. Name the best competing explanation, or state `alternative: none`.
+4. **Defense before probes** — try to defeat the claim from source context, tests, contracts, callers, history. A claim defeated here is not probed and not patched.
+5. **Probe and decide** — within the budget, then patch only the smallest change tied to the confirmed cause. Record what must not break.
+6. **Verify targeted-first** — the check that proves this fix, fail-before/pass-after when practical. A green broad suite does not substitute.
+7. **Handoff** — confirmed, rejected, and inconclusive items; the next 1–3 probes if any remain.
+
+## Autonomy policy
+
+Local reads, searches, tests, and typechecks proceed without asking. Destructive actions, production-like endpoints, credentials, payments, external side effects, and broad rewrites stop for approval. Patch only what is confirmed AND explicitly authorized; a review-only request stops at the decision with an actionable comment.
+
+## Budgets
+
+5 investigation iterations, 5 planned probes, 1 retry of an unchanged command after a fix. When a budget is spent, hand off instead of looping.
+
+## Depth
+
+One small claim: the four-line shape inline, a decision, done. Multi-claim or high blast radius: use IDs (F-001 / C-001) and a short ledger. Persist state files only for multi-session investigations (see the deep-investigation forms below when installed with the full profile).
+
+## Handoff triggers
+
+A version-sensitive external fact → `quaere-grounding`. Unclear code intent → `quaere-semantic`. Confirmed and authorized implementation → `quaere-execution`. A property-driven security audit rather than a single claim → `quaere-audit` when installed. Name the handoff and carry: the blocking question, confirmed inputs, inconclusive inputs, and the stop condition.
+
+**Stop now —** when a budget is spent, when two probes for the same claim come back inconclusive, before any destructive or production-like action, and once a confirmed fix is verified: stop and hand back rather than pushing past a gate.
+<!-- /quaere:layer -->
+
+<!-- quaere:layer pedagogy -->
+## Deep investigations
+
+The forms below extend the gate for Standard and Deep investigations — multi-claim reviews, high-blast-radius changes, or work that spans sessions. They are the same gate with more bookkeeping, not a different rule.
 
 ## Core model
 
@@ -81,59 +99,16 @@ Handoff       remaining open items, confidence, limits, and next probes
 
 Prefer discriminating evidence over volume: one probe that separates two competing hypotheses outworks ten observations that fit one story. Confidence is an update from evidence, not a writing style.
 
-## Depth control
-
-Choose the lightest process that still preserves falsifiability. Time hints are illustrative; the binding signal is *scope and risk* — how many independent claims, how reachable the impact, how unsafe the probe. Pad output to fill an imagined hour budget and you have already drifted.
-
-- **Challenge pass (one claim, ~10–20 min)** — one review comment, one suspicious stack trace, or a small non-obvious bug. Inline ledger is fine, but include a falsifier and a decision.
-- **Standard investigation (one failure/risky diff, ~30–90 min)** — CI failures, flaky behavior, auth/API contract concerns, or a multi-file review claim. Use IDs (`F-001`, `H-001`, `C-001`, `P-001`) and keep a concise ledger.
-- **Deep / handoff investigation (multi-system or high-blast-radius, 2h+)** — production-like effects, security-sensitive changes, concurrency/database behavior, several competing hypotheses, or work that may span sessions. Persist useful state files and stop after the budget with a clear handoff rather than looping.
-
-Do not let bookkeeping become the work. Collapse repeated facts, group related probes, and keep moving — but do not collapse away the falsifier, defense, decision, or safety stop.
-
-## State files
-
-For durable / multi-session investigations, persist a per-target ledger under `.agent-state/targets/<slug>/` (`findings.md`, `probes.md`, `handoff.md` are often enough). Templates are in `templates/`; layout and git-handling rules (local by default, never commit without explicit ask) are in [`references/state-files.md`](references/state-files.md). If the user does not want files written, keep the same structure in the response.
-
-## Guardrails
-
-- Do not patch before the defense/probe pass when root cause or risk is unclear.
-- Stop and ask before destructive actions, production-like endpoints, credentials, payment flows, external side effects, or broad rewrites. Prefer a safe substitute probe.
-- Default investigation budget unless the user says otherwise. Raise it only when risk justifies the cost.
-  - max investigation iterations: 5
-  - max planned probes at once: 5
-  - max retries of the same command after a *configuration or fix change*: 1 (re-running the same command after a change should produce a different result; if not, the change was not load-bearing). This budget is **not** the cap on flakiness characterization: running the same test 10× to gather pass-rate data is a single *probe* with a sample size, not 10 retries.
-  - max new state/template files per target: 8
-- If two probes for the same hypothesis are inconclusive, stop and hand off unless the user explicitly approves a meaningfully different third probe.
-- Always run at least one disconfirming probe for plausible hypotheses or risky review claims; "naming" a probe without running it does not satisfy the gate. **Carve-out for unprobeable claims**: when a hypothesis cannot be probed within the safety budget (production replay, payment flow, destructive operation), substitute a *defended rebuttal* — an explicit attempt to argue the strongest counter-explanation from source-context, tests, advisories, or specification — and label the Decision `confirmed (rebuttal-substituted)` with the rebuttal recorded under Defense. This substitution does not lower the bar; it trades execution evidence for documented-counter-argument evidence.
-- Do not force a single root cause. Some failures require necessary contributing factors or sufficient AND/OR combinations.
-- Patch only what is both confirmed **and** explicitly authorized. If the user asked only for review, investigation, or validation, stop at Decision and deliver the actionable comment or handoff — do not edit. When patching is authorized, record the Patch-target block (format under Workflow step 7).
-- Run the targeted verification first; a passing broad suite does not replace the targeted check (Workflow step 8).
-
-**Stop now — hard stops (full list under "Stop condition" at the end):** halt and hand back rather than push past a gate when the investigation budget is spent, when two probes for the same hypothesis come back inconclusive, before any destructive or production-like action, or once a confirmed fix is in hand — do not keep investigating or gold-plate past the confirmed cause.
-
-## Workflow
-
-A full bad-vs-good worked example is in [`references/worked-example.md`](references/worked-example.md); confirmation-bias rationalizations to defeat are in [`references/anti-patterns.md`](references/anti-patterns.md).
-
-### 0. Scope and symptom chronology
-
-Before forming explanations, record the boundary: the task or review claim being evaluated; files/commits/CI job/endpoint in scope; observed vs expected behavior; environment and recent changes when relevant; safety constraints and actions that need approval. Precise symptoms before guesses.
-
-### 1. Findings — facts only
-
-Read the request, relevant diffs, failing logs, tests, source context, and runtime paths. Record observations as Findings with evidence and limits; an observation is provisional and can be superseded.
+### Findings — facts with limits
 
 ```text
 F-003: `POST /reservations` accepts `deposit` from the client payload (src/api/reservations.ts:42).
 Evidence: line 42 reads `deposit` from `body`. Limit: does not yet prove the value is trusted downstream.
 ```
 
-("Validation is broken" is not a Finding — no evidence, no limit, nothing falsifiable.)
+### Hypotheses — the 6-field form
 
-### 2. Hypotheses — explanations with falsifiers
-
-Use Hypotheses for possible root causes: why a test fails, why a regression appears, why a race occurs. RCA tools (5 Whys, fishbone, fault trees) only *generate* hypotheses; nothing is confirmed until probes validate the leaves. **Every Hypothesis MUST contain these 6 fields, each on its own labeled line, in this exact order** — a hypothesis missing `Falsifier:` or `Disconfirming probe:` is a guess:
+RCA tools (5 Whys, fishbone, fault trees) only *generate* hypotheses; nothing is confirmed until probes validate the leaves.
 
 ```text
 H-001: <short title>
@@ -144,117 +119,63 @@ Disconfirming probe: <command or check whose unexpected result would falsify>
 Alternative: <competing hypothesis, or "none" when no plausible alternative exists>
 ```
 
-### 3. Review Claims — actionable concerns with argument structure
+### Review Claims — the 10-field form
 
-Use Review Claims for PR comments, security risks, API contract mismatches, data-loss risks, concurrency hazards, or design review issues. **Every Review Claim MUST contain these 10 fields, each on its own labeled line, in this exact order.** The analytical phase (Claim → Backing) builds the positive argument; the falsifiability phase (Qualifier → Disconfirming probe) records how it could fail — the first without the second is advocacy, not review. Drop or reorder a field and the claim is incomplete.
+The analytical phase (Claim → Backing) builds the positive argument; the falsifiability phase (Qualifier → Disconfirming probe) records how it could fail — the first without the second is advocacy, not review.
 
 ```text
 C-001: <short title>
 
-# Analytical phase — the claim and its evidential support
+# Analytical phase
 Claim: <the actionable concern>
 Data/Evidence: <file:line, diff, log, repro, spec, or trace>
 Warrant: <why the evidence implies the risk>
 Backing: <source-type> — <reference>
 
-# Falsifiability phase — how the claim could be defeated
+# Falsifiability phase
 Qualifier: high | medium | low confidence, with why
 Rebuttal / false-positive reason: <what could defeat the claim>
-Suggested probe: <supporting check whose expected result would corroborate the claim>
+Suggested probe: <supporting check whose expected result would corroborate>
 Falsifier: <observation that would defeat the claim>
 Disconfirming probe: <check whose unexpected result would defeat the claim>
 ```
 
-`<source-type>` MUST be one of `spec | invariant | test | policy | contract | RFC | ADR`, followed by the concrete reference (e.g., `Backing: contract — src/reservations/contract.md:17 requires HTTP 400 for startTime >= endTime`); `Backing: docs say so` does not satisfy the contract. `Suggested probe:` (a *supporting* check) and `Disconfirming probe:` (a *defeating* check) are NOT the same line — collapsing them removes the falsifiability gate. Most missed in practice: **Backing**, **Falsifier**, **Disconfirming probe**.
+`<source-type>` is one of `spec | invariant | test | policy | contract | RFC | ADR`, followed by the concrete reference; `Backing: docs say so` does not satisfy the contract. `Suggested probe` (supporting) and `Disconfirming probe` (defeating) are different lines — collapsing them removes the falsifiability gate.
 
-### 4. Defense — try to reject before accepting
+### Defense vocabulary
 
-For each plausible hypothesis or review claim, attempt to defeat it before acting: check source context, tests, runtime paths, contracts, caller/callee invariants, history, and counter-evidence. Weak, style-only, or unsupported claims should be `defeated` here rather than patched around. Defense results (a separate vocabulary from Decision labels, so a defended-but-deferred claim keeps its Defense audit trail):
-
-- **survives** — no counter-evidence found; still needs probe or already has one
+- **survives** — no counter-evidence found; still needs its probe
 - **narrowed** — true only for a subset of paths, inputs, versions, or environments
-- **defeated** — counter-evidence or context contradicts the claim at this stage (formerly `rejected`; renamed to disambiguate from Decision-level `rejected`)
+- **defeated** — counter-evidence or context contradicts the claim at this stage
 - **inconclusive** — evidence is missing or unsafe to gather within scope
 
-### 5. Probes — supporting, disconfirming, and discriminating
+### State files
 
-Create small verification actions: targeted tests, minimal reproductions, pass/fail deltas, grep/code search, typecheck/lint, or logs over broad rewrites. For unclear failures, minimize the reproduction or delta before asserting cause. Name which probe *distinguishes* between competing hypotheses — a probe that fits every hypothesis is weak evidence. Each important hypothesis or risky review claim should have:
-
-```text
-Supporting probe: result expected if the hypothesis/claim is true
-Disconfirming probe: result expected if it is false or scoped differently
-Scope probe: optional check for whether this is local or systemic
-```
-
-For unclear failures, minimize the reproduction or delta before asserting cause: reduce input, configuration, commit range, environment, or code path until the cause-effect chain is visible. For complex failures, name which probe distinguishes between competing hypotheses; a probe that fits every hypothesis is weak evidence.
-
-### 6. Decision — label before editing or commenting
-
-```text
-confirmed: evidence supports action now; a disconfirming probe was run and did not defeat it
-confirmed (rebuttal-substituted): the probe was unsafe or unavailable within scope; the strongest counter-explanation was named, defended against source context, and rejected. Mark this label exactly so reviewers can audit the substitution.
-rejected: counter-evidence or source context defeats the claim
-inconclusive: evidence is insufficient, or the probe is unsafe to run and no defended rebuttal closes the gap
-deferred: real concern, but outside current request or budget
-```
-
-If no claim or hypothesis survives defense, say so and do not invent a patch. If the concern is real but external/version-sensitive, hand off to `quaere-grounding`. If code intent is the blocker, hand off to `quaere-semantic`.
-
-### 7. Patch — only confirmed and authorized items
-
-Patch only when the claim/hypothesis is confirmed **and** implementation is explicitly authorized; review-only requests stop at Decision with the actionable comment or handoff — do not edit. Make the smallest change tied to the confirmed cause or risk; no adjacent refactoring. Before editing or handing off to `quaere-execution`, record:
-
-```text
-Patch target: <file/symbol>
-Confirmed cause/risk: H-001 / C-001
-Must preserve: <invariant, API, behavior, or safety guard>
-Verification: <targeted check that should fail before and pass after, when practical>
-```
-
-### 8. Verification
-
-Run targeted verification first: the check that proves the confirmed item was addressed; broader checks only when justified by risk and project convention. Record command, result, and conclusion. A passing broad suite does not erase the need for the targeted check; if a check cannot be run, say why and name the best substitute or next command.
-
-### 9. Handoff
-
-Summarize: confirmed and fixed items; rejected claims/hypotheses and why; inconclusive probes and what blocked them; remaining open hypotheses or necessary contributing factors; confidence shifts and limits; next 1–3 recommended probes.
-
-## Worked example
-
-A bad-output (confirmation-first patch) vs good-output (Findings → Claims/Hypotheses → Defense → Probes → Decision → Patch → Verification) example, applied to an intermittent reservation-spec failure where the "validation is broken" review claim turns out to be wrong, is at [`references/worked-example.md`](references/worked-example.md). Read it when the full 10-field Review Claim format feels abstract.
-
-## Common drift modes and anti-patterns
-
-Confirmation bias rationalizations that slip back in even with the gate loaded ("plausible — I can act", "I found three supporting clues", "test passed after my patch", "Confidence: high" without qualifier/rebuttal, patch-first debugging, review-comment laundering, etc.) and how each one skips the falsifier or defense are at [`references/anti-patterns.md`](references/anti-patterns.md). Read it before promoting a claim to `confirmed`.
+For durable / multi-session investigations, persist a per-target ledger under `.agent-state/targets/<slug>/` (`findings.md`, `probes.md`, `handoff.md` are often enough). Templates are in `templates/`; layout and git-handling rules are in [`references/state-files.md`](references/state-files.md). If the user does not want files written, keep the same structure in the response.
 
 ## Handoff to other skills
 
-When handing off, emit this standard block so the receiving skill knows exactly what it is being given:
+When switching skills, emit this payload so the receiver knows exactly what it is given:
 
-```
+```text
 Handoff
 - From skill: quaere-evidence
 - Blocking question: <what cannot be decided within this skill's scope>
 - Confirmed inputs: <findings, claims, and decisions safe to carry forward>
 - Inconclusive inputs: <claims or facts not safe to treat as true>
-- Required next skill: <quaere-grounding | quaere-semantic | quaere-execution | (quaere-audit, if the extension is installed)>
+- Required next skill: <quaere-grounding | quaere-semantic | quaere-execution | quaere-audit>
 - Stop condition: <what the next skill must return before this investigation can resume>
 ```
 
-The four handoff triggers (grounding / semantic / execution / audit-extension) are
-listed under "Handoff triggers" near the top. Emit the payload block above when
-switching, and carry the relevant Findings/Claims/probes already run. When handing
-to `quaere-grounding`, include the unconfirmed external claim, the local version
-anchor (or "missing"), and the decision blocked by it.
-
 ## Stop condition
 
-This skill is complete when:
+This skill is complete when every active claim or hypothesis has a Decision; when every non-trivial `confirmed` names the evidence that supported it and the disconfirming probe that ran and did not defeat it (or, for `confirmed (rebuttal-substituted)`, the unsafe-probe reason and the defended rebuttal that closed the gap); when confirmed and authorized items are patched and verified or explicitly handed off; when inconclusive items carry the next probe needed and the budget already consumed; and when the user has enough material to decide whether to expand probes, accept the result, or hand off. Do not loop on the same claim past the budget — if two probes come back inconclusive, hand off instead of running a third.
 
-- every active hypothesis or claim has a Decision (`confirmed` / `rejected` / `inconclusive` / `deferred`)
-- every non-trivial `confirmed` decision names the evidence that supported it and the disconfirming probe that was run and did not defeat it; `confirmed (rebuttal-substituted)` decisions name the unsafe-probe reason and the defended rebuttal that closed the gap instead
-- confirmed + authorized items are patched and verified or explicitly handed off to `quaere-execution`; confirmed but unauthorized items stop at an actionable comment/handoff without editing
-- inconclusive items are reported with the next probe needed and any budget or safety limit already consumed
-- the user has enough material to decide whether to expand probes, accept the result, or hand off
+## Worked example
 
-Do not loop on the same hypothesis past the budget. If two probes for the same hypothesis are inconclusive, stop and hand off instead of running a third.
+A bad-output (confirmation-first patch) vs good-output walkthrough is in [`references/worked-example.md`](references/worked-example.md). Read it when the deep-investigation forms feel abstract.
+
+## Common drift modes and anti-patterns
+
+Confirmation-bias rationalizations ("plausible — I can act", "three supporting clues", "test passed after my patch") and how each one skips the falsifier or defense are in [`references/anti-patterns.md`](references/anti-patterns.md). Read them before promoting a claim to `confirmed` in a high-stakes review.
+<!-- /quaere:layer -->
