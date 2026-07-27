@@ -1,6 +1,6 @@
 import { defineCommand, runMain } from 'citty'
 import { runDoctor } from './commands/doctor.js'
-import { runInstall } from './commands/install.js'
+import { runInstall, type InstallOptions } from './commands/install.js'
 import { runList } from './commands/list.js'
 import { runUpdate } from './commands/update.js'
 import type { Agent } from './lib/paths.js'
@@ -30,6 +30,10 @@ const installCommand = defineCommand({
       type: 'string',
       description: 'Install a named extension alongside the core set (repeatable, e.g. --skill audit)',
     },
+    profile: {
+      type: 'string',
+      description: 'Assembly profile: full | lean | contract | auto (default: full; auto = codex→lean, claude→contract)',
+    },
   },
   async run({ args }) {
     const agentArg = args.agent
@@ -40,7 +44,17 @@ const installCommand = defineCommand({
     const agent = (agentArg as Agent | undefined) ?? 'auto'
     const skillArg = args.skill
     const skills = skillArg ? (Array.isArray(skillArg) ? skillArg : [skillArg]) : undefined
-    await runInstall(agent, { force: args.force, extensions: args.extensions, skills })
+    const profileArg = args.profile
+    if (profileArg && !['full', 'lean', 'contract', 'auto'].includes(profileArg)) {
+      console.error(`error: unknown profile "${profileArg}" (expected: full | lean | contract | auto)`)
+      process.exit(2)
+    }
+    await runInstall(agent, {
+      force: args.force,
+      extensions: args.extensions,
+      skills,
+      profile: profileArg as InstallOptions['profile'],
+    })
   },
 })
 

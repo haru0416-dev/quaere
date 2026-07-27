@@ -1,7 +1,8 @@
-import { cpSync, existsSync, mkdirSync, renameSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { mergeManifest, readManifest, writeManifest } from '../lib/manifest.js'
-import { Agent, resolveTargetDirs } from '../lib/paths.js'
+import { Agent, getClaudeSkillsDir, resolveTargetDirs } from '../lib/paths.js'
+import { assembleProfile, hasProfileTags, type Profile } from '../lib/profile.js'
 import { resolveSkillSelection } from '../lib/skills.js'
 
 declare const __VERSION__: string
@@ -10,6 +11,8 @@ export interface InstallOptions {
   force?: boolean
   extensions?: boolean
   skills?: string[]
+  /** Assembly profile; 'auto' picks per target (codex → lean, claude → contract). */
+  profile?: Profile | 'auto'
 }
 
 export async function runInstall(agent: Agent, opts: InstallOptions = {}): Promise<void> {
@@ -30,8 +33,12 @@ export async function runInstall(agent: Agent, opts: InstallOptions = {}): Promi
   }
 
   const targets = resolveTargetDirs(agent)
+  const requested = opts.profile ?? 'full'
 
   for (const targetDir of targets) {
+    // Measured basis for the auto mapping: docs/profile-separation.md.
+    const profile: Profile =
+      requested === 'auto' ? (targetDir === getClaudeSkillsDir() ? 'contract' : 'lean') : requested
     mkdirSync(targetDir, { recursive: true })
 
     const installed: string[] = []
@@ -45,7 +52,11 @@ export async function runInstall(agent: Agent, opts: InstallOptions = {}): Promi
       // Check version match to skip unnecessary work (unless --force)
       if (!opts.force && existsSync(dest)) {
         const existing = readManifest(targetDir)
-        if (existing?.quaere_version === __VERSION__ && existing.skills.includes(skill.name)) {
+        if (
+          existing?.quaere_version === __VERSION__ &&
+          existing.skills.includes(skill.name) &&
+          (existing.profile ?? 'full') === profile
+        ) {
           skipped.push(skill.name)
           continue
         }
@@ -56,6 +67,16 @@ export async function runInstall(agent: Agent, opts: InstallOptions = {}): Promi
 
       // Stage into a temporary directory first
       cpSync(skill.dir, staging, { recursive: true })
+
+      // Assemble the requested profile from the tagged single source. Untagged
+      // skills (not yet converted) install as-is under every profile.
+      if (profile !== 'full') {
+        const skillFile = join(staging, 'SKILL.md')
+        if (existsSync(skillFile)) {
+          const source = readFileSync(skillFile, 'utf-8')
+          if (hasProfileTags(source)) writeFileSync(skillFile, assembleProfile(source, profile), 'utf-8')
+        }
+      }
 
       // Back up the current install (if any) before promoting staging
       if (existsSync(dest)) {
@@ -81,9 +102,9 @@ export async function runInstall(agent: Agent, opts: InstallOptions = {}): Promi
 
     // Update manifest (additive — preserves skills installed by other tools)
     const existing = readManifest(targetDir)
-    writeManifest(targetDir, mergeManifest(existing, __VERSION__, installed))
+    writeManifest(targetDir, mergeManifest(existing, __VERSION__, installed, profile))
 
-    console.log(`\nInstalled to ${targetDir}:`)
+    console.log(`\nInstalled to ${targetDir}${profile !== 'full' ? ` (profile: ${profile})` : ''}:`)
     for (const name of installed) {
       console.log(`  ✓ ${name}`)
     }

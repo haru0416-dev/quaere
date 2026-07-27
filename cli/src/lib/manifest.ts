@@ -4,6 +4,8 @@ import { join } from 'node:path'
 export interface Manifest {
   quaere_version: string
   skills: string[]
+  /** Assembly profile the skills were installed with; absent means full. */
+  profile?: string
 }
 
 export function readManifest(targetDir: string): Manifest | null {
@@ -29,7 +31,11 @@ export function mergeManifest(
   existing: Manifest | null,
   version: string,
   newSkills: string[],
+  profile?: string,
 ): Manifest {
   const skills = new Set([...(existing?.skills ?? []), ...newSkills])
-  return { quaere_version: version, skills: [...skills].toSorted() }
+  const merged: Manifest = { quaere_version: version, skills: [...skills].toSorted() }
+  const effective = profile ?? existing?.profile
+  if (effective && effective !== 'full') merged.profile = effective
+  return merged
 }
