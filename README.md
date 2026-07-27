@@ -68,6 +68,14 @@ Quaere is **four core skills** plus opt-in **extensions**. `quaere install`
 installs the core set; extensions are installed on request
 (`quaere install --extensions`, or `quaere install --skill <name>`).
 
+Skills are also splitting into **install profiles** assembled from a single
+tagged source — `full` (default), `lean` (gate + method, ~115 lines
+assembled), and `contract` (the claim shape and decision labels only, for
+Claude-family agents whose baseline already carries the discipline):
+`quaere install --profile auto` picks per agent. Measured basis and rollout
+gates: [`docs/profile-separation.md`](docs/profile-separation.md). Pilot:
+`quaere-evidence`; untagged skills install identically under every profile.
+
 ### Core (installed by default)
 
 | Skill | Use when | Main safeguard |
