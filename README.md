@@ -6,6 +6,18 @@
 [![Latest release](https://img.shields.io/github/v/release/haru0416-dev/quaere?label=release&color=6b3fa0)](https://github.com/haru0416-dev/quaere/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+## Archived
+
+This project is archived and is no longer maintained. It is retained as reference material, not a recommendation to install the full collection. Advances in models and coding agents may have reduced the need for these additional instructions.
+
+Much of Quaere prescribes code reading, fact-checking, and verification practices that may overlap with your model's behavior or your agent harness's instructions. The collection also contains task-specific audit and naming checklists, templates, and a naming-availability script. Not every component has been shown to be unnecessary.
+
+The [later profile comparison](docs/profile-separation.md) reports correct verdicts from Sonnet 5 without skills in all six reported runs, plus unaided discovery of all three invariants in a token-bucket fixture. Those are small-sample observations (one run per condition), not a finding about every model or task. The headline 53% → 91% assertion pass rate below comes from older skill bodies and a targeted in-tree suite; see the [evaluation record](docs/evaluation.md).
+
+This archive review inspected the skill contents and existing evaluation records; it did not run a new comparison on current models. Start without the collection and try individual workflows only where you observe a concrete gap. The descriptions, measurements, installation instructions, and roadmap below are retained as historical documentation, not guarantees of current effectiveness, compatibility, or future releases.
+
+---
+
 Coding agents rarely fail by saying "I do not know." They fail by sounding finished too early: they skim code, accept plausible claims, patch a wide diff, and report success before the cause is proven.
 
 Quaere is four core [skills](https://docs.claude.com/en/docs/claude-code/skills) plus five opt-in extensions for Claude Code, Codex CLI, and other skill-aware coding agents. A skill is a markdown file the agent loads on demand based on task context — each core skill gates a different drift point: read the code semantically, ground external facts, prove claims, and execute changes in small verified steps. The extensions add security auditing, structured ideation, naming, 0→1 origination, and adversarial pressure-testing on top.
@@ -37,7 +49,7 @@ Measured at v0.3.1 on the 18-scenario / 106-assertion suite; the suite has since
 
 The eval is a regression harness for Quaere's own failure modes, not a third-party benchmark. A separate Terminal-Bench sweep (`terminal-bench-core==0.1.1`, v0.3.2 install pipeline) reports two cuts:
 
-- **+1.25 pp on the full 80-task set** (41/80 → 42/80, 51.25% → 52.50%). Within typical run-to-run variance — read it as "does not regress".
+- **+1.25 pp on the full 80-task set** (41/80 → 42/80, 51.25% → 52.50%). A net gain of one task in this sweep does not establish a reliable improvement or rule out regressions.
 - **+8.7 pp on the 69 tasks where the install pipeline wasn't broken** (52.2% → 60.9%). The other 11 tasks failed before the skill could load.
 
 The per-category cut, taken on the clean 69-task subset, sits underneath those averages — with small per-category samples (n = 3 to 10), treat the splits as suggestive rather than confirmed effects: data-processing +60 pp, SWE-bench style +25 pp, security +22 pp, build/compile +17 pp, ML/AI −10 pp, the remaining five categories ~0. Variance notes and the per-task breakdown live in [`docs/evaluation.md`](docs/evaluation.md).
